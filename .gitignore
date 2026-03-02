@@ -1,0 +1,8 @@
+node_modules/
+.next/
+AndroidApp/android/app/build/
+AndroidApp/android/.gradle/
+*.apk
+*.aab
+.env
+.env.*
