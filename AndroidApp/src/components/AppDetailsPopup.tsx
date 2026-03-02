@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
     View,
     Text,
@@ -6,7 +6,8 @@ import {
     Modal,
     Image,
     TouchableOpacity,
-    Animated
+    Animated,
+    Dimensions
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AppModel } from '../config/supabase';
@@ -18,38 +19,59 @@ interface AppDetailsPopupProps {
     onClose: () => void;
 }
 
+const { height } = Dimensions.get('window');
+
 export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, onClose }) => {
     const [downloading, setDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
+    const [isDownloaded, setIsDownloaded] = useState(false);
 
-    // Quick reset when modal opens/closes
-    React.useEffect(() => {
-        if (!visible) {
-            setDownloading(false);
-            setProgress(0);
-        }
-    }, [visible]);
+    useEffect(() => {
+        if (!app || !visible) return;
+
+        const fileName = `${app.name.replace(/\s+/g, '_')}_v${app.version}.apk`;
+
+        const checkStatus = async () => {
+            const exists = await DownloadInstallService.isApkDownloaded(fileName);
+            setIsDownloaded(exists);
+
+            if (DownloadInstallService.isDownloading(fileName)) {
+                setDownloading(true);
+            } else {
+                setDownloading(false);
+                setProgress(0);
+            }
+        };
+
+        checkStatus();
+
+        const progressCallback = (prog: number) => {
+            setDownloading(true);
+            setProgress(prog);
+            if (prog >= 1) {
+                setDownloading(false);
+                setIsDownloaded(true);
+            }
+        };
+
+        DownloadInstallService.subscribe(fileName, progressCallback);
+
+        return () => {
+            DownloadInstallService.unsubscribe(fileName, progressCallback);
+        };
+    }, [app, visible]);
 
     if (!app) return null;
 
-    const handleDownload = async () => {
-        try {
+    const handleAction = async () => {
+        const fileName = `${app.name.replace(/\s+/g, '_')}_v${app.version}.apk`;
+
+        if (isDownloaded) {
+            await DownloadInstallService.installExistingApk(fileName);
+        } else {
             setDownloading(true);
             setProgress(0);
-
-            const fileName = `${app.name.replace(/\s+/g, '_')}_v${app.version}.apk`;
-
-            await DownloadInstallService.downloadAndInstall(
-                app.apk_url,
-                fileName,
-                (prog) => setProgress(prog)
-            );
-
-        } catch {
-            // Error is handled by the service, we just reset state here
-        } finally {
-            setDownloading(false);
-            setProgress(0);
+            await DownloadInstallService.downloadAndInstall(app.apk_url, fileName);
         }
     };
 
@@ -64,17 +86,24 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                 <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
 
                 <View style={styles.popupContainer}>
+                    {/* Drag Handle */}
+                    <View style={styles.dragHandleContainer}>
+                        <View style={styles.dragHandle} />
+                    </View>
+
                     <TouchableOpacity style={styles.closeButton} onPress={onClose}>
-                        <Icon name="close" size={24} color="#A0AEC0" />
+                        <Icon name="close" size={20} color="#94A3B8" />
                     </TouchableOpacity>
 
                     <View style={styles.header}>
-                        <Image source={{ uri: app.icon_url }} style={styles.largeIcon} />
+                        <View style={styles.iconWrapper}>
+                            <Image source={{ uri: app.icon_url }} style={styles.largeIcon} />
+                        </View>
                         <Text style={styles.appName}>{app.name}</Text>
-                        <Text style={styles.appVersion}>Version {app.version}</Text>
+                        <View style={styles.versionBadge}>
+                            <Text style={styles.appVersion}>Version {app.version}</Text>
+                        </View>
                     </View>
-
-                    <View style={styles.divider} />
 
                     <View style={styles.body}>
                         <Text style={styles.sectionTitle}>About</Text>
@@ -88,20 +117,20 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                                     <Animated.View
                                         style={[
                                             styles.progressBarFill,
-                                            { width: `${progress * 100}% ` }
+                                            { width: `${progress * 100}%` }
                                         ]}
                                     />
                                 </View>
-                                <Text style={styles.progressText}>{Math.round(progress * 100)}%</Text>
+                                <Text style={styles.progressText}>{Math.round(progress * 100)}% Complete</Text>
                             </View>
                         ) : (
                             <TouchableOpacity
-                                style={styles.actionButton}
+                                style={[styles.actionButton, isDownloaded && styles.actionButtonSuccess]}
                                 activeOpacity={0.8}
-                                onPress={handleDownload}
+                                onPress={handleAction}
                             >
-                                <Icon name="cloud-download" size={24} color="#FFF" style={styles.actionIcon} />
-                                <Text style={styles.actionButtonText}>Get Application</Text>
+                                <Icon name={isDownloaded ? "check-decagram" : "download"} size={24} color={isDownloaded ? "#0B132B" : "#0B132B"} style={styles.actionIcon} />
+                                <Text style={styles.actionButtonText}>{isDownloaded ? "Open/Install APK" : "Download & Install"}</Text>
                             </TouchableOpacity>
                         )}
                     </View>
@@ -116,30 +145,43 @@ const styles = StyleSheet.create({
     overlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'rgba(10, 15, 36, 0.7)',
+        backgroundColor: 'rgba(5, 8, 20, 0.85)',
     },
     backdrop: {
         ...StyleSheet.absoluteFillObject,
     },
     popupContainer: {
-        backgroundColor: '#1E293B', // Dark slate
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
+        backgroundColor: '#0F172A',
+        borderTopLeftRadius: 36,
+        borderTopRightRadius: 36,
         padding: 24,
         paddingBottom: 40,
-        shadowColor: '#000',
+        height: height * 0.7,
+        shadowColor: '#00B4D8',
         shadowOffset: { width: 0, height: -10 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
+        shadowOpacity: 0.15,
+        shadowRadius: 30,
         elevation: 24,
-        minHeight: '50%',
+        borderWidth: 1,
+        borderBottomWidth: 0,
+        borderColor: 'rgba(255, 255, 255, 0.08)',
+    },
+    dragHandleContainer: {
+        alignItems: 'center',
+        paddingBottom: 20,
+    },
+    dragHandle: {
+        width: 40,
+        height: 5,
+        borderRadius: 3,
+        backgroundColor: 'rgba(255, 255, 255, 0.2)',
     },
     closeButton: {
         position: 'absolute',
-        top: 20,
-        right: 20,
+        top: 24,
+        right: 24,
         zIndex: 10,
-        padding: 8,
+        padding: 10,
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
         borderRadius: 20,
     },
@@ -147,83 +189,105 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginTop: 10,
     },
+    iconWrapper: {
+        shadowColor: '#00B4D8',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.3,
+        shadowRadius: 20,
+        elevation: 15,
+        marginBottom: 20,
+        borderRadius: 32,
+        backgroundColor: '#1E293B',
+    },
     largeIcon: {
-        width: 90,
-        height: 90,
-        borderRadius: 24,
-        marginBottom: 16,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        width: 110,
+        height: 110,
+        borderRadius: 32,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.15)',
     },
     appName: {
-        fontSize: 24,
-        fontWeight: '800',
-        color: '#FFFFFF',
-        marginBottom: 4,
+        fontSize: 28,
+        fontWeight: '900',
+        color: '#F8FAFC',
+        marginBottom: 8,
         textAlign: 'center',
         letterSpacing: 0.5,
     },
-    appVersion: {
-        fontSize: 16,
-        color: '#00B4D8',
-        fontWeight: '600',
+    versionBadge: {
+        backgroundColor: 'rgba(0, 180, 216, 0.15)',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 180, 216, 0.3)',
     },
-    divider: {
-        height: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.08)',
-        marginVertical: 24,
+    appVersion: {
+        fontSize: 14,
+        color: '#00B4D8',
+        fontWeight: '700',
+        letterSpacing: 0.5,
     },
     body: {
         flex: 1,
+        marginTop: 32,
     },
     sectionTitle: {
         fontSize: 18,
-        fontWeight: '700',
-        color: '#E2E8F0',
+        fontWeight: '800',
+        color: '#FFFFFF',
         marginBottom: 12,
+        letterSpacing: 0.5,
     },
     description: {
-        fontSize: 16,
+        fontSize: 15,
         color: '#94A3B8',
-        lineHeight: 24,
+        lineHeight: 26,
     },
     footer: {
-        marginTop: 32,
+        paddingTop: 20,
     },
     actionButton: {
         backgroundColor: '#00B4D8',
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 16,
-        borderRadius: 16,
+        paddingVertical: 18,
+        borderRadius: 20,
         shadowColor: '#00B4D8',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.4,
-        shadowRadius: 12,
-        elevation: 8,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.5,
+        shadowRadius: 16,
+        elevation: 10,
+    },
+    actionButtonSuccess: {
+        backgroundColor: '#10B981', // Emerald green
+        shadowColor: '#10B981',
     },
     actionIcon: {
-        marginRight: 8,
+        marginRight: 10,
     },
     actionButtonText: {
-        color: '#FFF',
+        color: '#0B132B',
         fontSize: 18,
-        fontWeight: '700',
+        fontWeight: '800',
         letterSpacing: 0.5,
     },
     progressContainer: {
         alignItems: 'center',
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        padding: 16,
-        borderRadius: 16,
+        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        padding: 24,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.05)',
     },
     progressBarBackground: {
         width: '100%',
         height: 8,
-        backgroundColor: 'rgba(255, 255, 255, 0.1)',
+        backgroundColor: 'rgba(255, 255, 255, 0.08)',
         borderRadius: 4,
         overflow: 'hidden',
-        marginBottom: 12,
+        marginBottom: 16,
     },
     progressBarFill: {
         height: '100%',
@@ -231,8 +295,8 @@ const styles = StyleSheet.create({
         borderRadius: 4,
     },
     progressText: {
-        color: '#E2E8F0',
+        color: '#00B4D8',
         fontSize: 16,
-        fontWeight: '600',
+        fontWeight: '700',
     }
 });
