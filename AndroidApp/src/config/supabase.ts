@@ -60,7 +60,6 @@ export const fetchApps = async (): Promise<AppModel[]> => {
     try {
         // Attempt to fetch from Supabase
         const { data, error } = await supabase.from('apps').select('*');
-        console.log('Supa api key used', SUPABASE_SERVICE_ROLE_KEY);
 
         if (error || !data || data.length === 0) {
             console.warn('Supabase fetch failed or returned empty. Using mock data.', error);

@@ -31,6 +31,12 @@ jobs:
         working-directory: ./AndroidApp
         run: npm install
 
+      - name: Create .env file from Secrets
+        working-directory: ./AndroidApp
+        run: |
+          echo "NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env
+          echo "SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
+
       - name: Build Release APK
         working-directory: ./AndroidApp/android
         run: |
@@ -42,7 +48,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          files: AndroidApp/android/app/build/outputs/apk/release/app-release.apk
+          files: AndroidApp/android/app/build/outputs/apk/release/app-arm64-v8a-release.apk
           name: "Zeeshan's App Hub v${{ github.run_number }}"
           tag_name: build-${{ github.run_number }}
           draft: false

@@ -10,7 +10,6 @@ export default function AdminUploadForm() {
         version: "",
         description: "",
     });
-    const [iconFile, setIconFile] = useState<File | null>(null);
     const [apkFile, setApkFile] = useState<File | null>(null);
 
     const [isUploading, setIsUploading] = useState(false);
@@ -22,9 +21,8 @@ export default function AdminUploadForm() {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "icon" | "apk") => {
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "apk") => {
         if (e.target.files && e.target.files.length > 0) {
-            if (type === "icon") setIconFile(e.target.files[0]);
             if (type === "apk") setApkFile(e.target.files[0]);
         }
     };
@@ -32,8 +30,8 @@ export default function AdminUploadForm() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (!formData.name || !formData.version || !formData.description || !iconFile || !apkFile) {
-            setErrorMessage("Please fill all fields and select both files.");
+        if (!formData.name || !formData.version || !formData.description || !apkFile) {
+            setErrorMessage("Please fill all fields and select the APK file.");
             setStatus("error");
             return;
         }
@@ -47,7 +45,6 @@ export default function AdminUploadForm() {
             formDataObj.append("name", formData.name);
             formDataObj.append("version", formData.version);
             formDataObj.append("description", formData.description);
-            formDataObj.append("icon", iconFile);
             formDataObj.append("apk", apkFile);
 
             // Execute secure Server Action
@@ -60,7 +57,6 @@ export default function AdminUploadForm() {
             // Success! Reset form
             setStatus("success");
             setFormData({ name: "", version: "", description: "" });
-            setIconFile(null);
             setApkFile(null);
 
             // Reset file input elements to clear their UI display
@@ -130,39 +126,7 @@ export default function AdminUploadForm() {
                 </div>
 
                 {/* File Upload Section */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t border-slate-700/50">
-
-                    {/* Icon Upload */}
-                    <div>
-                        <label className="block text-sm font-medium text-slate-300 mb-2">App Icon (Image)</label>
-                        <div className="relative group rounded-xl border-2 border-dashed border-slate-600 hover:border-blue-400 bg-slate-800/30 transition-all p-6 text-center cursor-pointer">
-                            <input
-                                type="file"
-                                accept="image/*"
-                                onChange={(e) => handleFileChange(e, "icon")}
-                                className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                                required
-                            />
-                            <div className="flex flex-col items-center justify-center space-y-2">
-                                {iconFile ? (
-                                    <>
-                                        <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-1" />
-                                        <span className="text-sm text-emerald-300 font-medium truncate max-w-full px-2">
-                                            {iconFile.name}
-                                        </span>
-                                    </>
-                                ) : (
-                                    <>
-                                        <div className="p-3 bg-slate-800 rounded-full group-hover:bg-blue-500/20 transition-colors">
-                                            <UploadCloud className="w-6 h-6 text-blue-400" />
-                                        </div>
-                                        <span className="text-sm text-slate-400">Select Image</span>
-                                        <span className="text-xs text-slate-500">PNG, JPG up to 2MB</span>
-                                    </>
-                                )}
-                            </div>
-                        </div>
-                    </div>
+                <div className="pt-4 border-t border-slate-700/50">
 
                     {/* APK Upload */}
                     <div>
@@ -195,7 +159,6 @@ export default function AdminUploadForm() {
                             </div>
                         </div>
                     </div>
-
                 </div>
 
                 {/* Status Messages */}
@@ -209,7 +172,7 @@ export default function AdminUploadForm() {
                 {status === "success" && (
                     <div className="flex items-center space-x-2 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-lg text-emerald-400">
                         <CheckCircle2 className="w-5 h-5 flex-shrink-0" />
-                        <p className="text-sm">App published successfully to Supabase!</p>
+                        <p className="text-sm">App published successfully!</p>
                     </div>
                 )}
 
@@ -222,7 +185,7 @@ export default function AdminUploadForm() {
                     {isUploading ? (
                         <span className="flex items-center justify-center space-x-2">
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Uploading to Supabase...</span>
+                            <span>Uploading Application...</span>
                         </span>
                     ) : (
                         <span className="flex items-center justify-center space-x-2">
