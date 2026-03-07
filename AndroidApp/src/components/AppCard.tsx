@@ -12,119 +12,154 @@ const { width } = Dimensions.get('window');
 
 export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
     return (
-        <TouchableOpacity style={styles.cardContainer} activeOpacity={0.7} onPress={() => onPress(app)}>
-            <View style={styles.backgroundGlow} />
-            <View style={styles.contentContainer}>
-                <View style={styles.iconContainer}>
-                    <Image source={{ uri: app.icon_url }} style={styles.appIcon} />
-                </View>
+        <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => onPress(app)}>
+            {/* Accent stripe */}
+            <View style={styles.accentStripe} />
 
-                <View style={styles.infoContainer}>
-                    <Text style={styles.appName} numberOfLines={1}>{app.name}</Text>
-                    <View style={styles.versionBadge}>
-                        <Text style={styles.appVersion}>v{app.version}</Text>
+            <View style={styles.content}>
+                {/* App Icon */}
+                <View style={styles.iconShadow}>
+                    <View style={styles.iconBox}>
+                        <Image source={{ uri: app.icon_url }} style={styles.icon} />
                     </View>
                 </View>
 
-                <View style={styles.actionContainer}>
-                    <View style={styles.downloadButton}>
-                        <Icon name="download" size={20} color="#0B132B" />
+                {/* Info */}
+                <View style={styles.info}>
+                    <Text style={styles.name} numberOfLines={1}>{app.name}</Text>
+                    <Text style={styles.desc} numberOfLines={1}>{app.description}</Text>
+                    <View style={styles.metaRow}>
+                        <View style={styles.versionPill}>
+                            <Text style={styles.versionText}>v{app.version}</Text>
+                        </View>
+                        <View style={styles.sizePill}>
+                            <Icon name="android" size={11} color="#A78BFA" />
+                            <Text style={styles.sizeText}>APK</Text>
+                        </View>
                     </View>
                 </View>
+
+                {/* Get Button */}
+                <TouchableOpacity style={styles.getBtn} activeOpacity={0.7} onPress={() => onPress(app)}>
+                    <Text style={styles.getBtnText}>GET</Text>
+                </TouchableOpacity>
             </View>
         </TouchableOpacity>
     );
 };
 
 const styles = StyleSheet.create({
-    cardContainer: {
-        position: 'relative',
-        marginVertical: 10,
+    card: {
         marginHorizontal: 20,
-        borderRadius: 24,
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.08)',
-        shadowColor: '#00B4D8',
-        shadowOffset: { width: 0, height: 12 },
-        shadowOpacity: 0.15,
-        shadowRadius: 24,
-        elevation: 10,
-    },
-    backgroundGlow: {
-        ...StyleSheet.absoluteFillObject,
-        backgroundColor: 'rgba(0, 180, 216, 0.02)',
-        borderRadius: 24,
-    },
-    contentContainer: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 18,
-    },
-    iconContainer: {
-        width: 64,
-        height: 64,
-        borderRadius: 18,
-        backgroundColor: '#1E293B',
-        justifyContent: 'center',
-        alignItems: 'center',
+        marginBottom: 14,
+        borderRadius: 20,
+        backgroundColor: '#161B2E',
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 5,
+        borderColor: 'rgba(167, 139, 250, 0.08)',
+        elevation: 6,
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.12,
+        shadowRadius: 16,
     },
-    appIcon: {
+    accentStripe: {
+        height: 3,
+        backgroundColor: 'transparent',
+        // This creates a visual gradient effect via a thin gradient line
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(167, 139, 250, 0.2)',
+    },
+    content: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        padding: 16,
+    },
+    iconShadow: {
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.25,
+        shadowRadius: 10,
+        elevation: 6,
+    },
+    iconBox: {
+        width: 58,
+        height: 58,
+        borderRadius: 16,
+        backgroundColor: '#1E2440',
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.06)',
+    },
+    icon: {
         width: '100%',
         height: '100%',
         resizeMode: 'cover',
     },
-    infoContainer: {
+    info: {
         flex: 1,
-        marginLeft: 18,
+        marginLeft: 14,
         justifyContent: 'center',
     },
-    appName: {
-        fontSize: 19,
-        fontWeight: '800',
-        color: '#FFFFFF',
+    name: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#F1F5F9',
+        letterSpacing: 0.2,
+        marginBottom: 3,
+    },
+    desc: {
+        fontSize: 12,
+        color: '#64748B',
         marginBottom: 8,
+        lineHeight: 16,
+    },
+    metaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+    },
+    versionPill: {
+        backgroundColor: 'rgba(56, 189, 248, 0.12)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+    },
+    versionText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#38BDF8',
         letterSpacing: 0.3,
     },
-    versionBadge: {
-        alignSelf: 'flex-start',
-        backgroundColor: 'rgba(0, 180, 216, 0.15)',
-        paddingHorizontal: 10,
-        paddingVertical: 4,
-        borderRadius: 8,
-        borderWidth: 1,
-        borderColor: 'rgba(0, 180, 216, 0.3)',
-    },
-    appVersion: {
-        fontSize: 12,
-        fontWeight: '700',
-        color: '#00B4D8',
-        letterSpacing: 0.5,
-    },
-    actionContainer: {
-        justifyContent: 'center',
+    sizePill: {
+        flexDirection: 'row',
         alignItems: 'center',
-        paddingLeft: 12,
+        backgroundColor: 'rgba(167, 139, 250, 0.1)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        gap: 3,
     },
-    downloadButton: {
-        backgroundColor: '#00B4D8',
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        justifyContent: 'center',
-        alignItems: 'center',
-        shadowColor: '#00B4D8',
-        shadowOffset: { width: 0, height: 6 },
-        shadowOpacity: 0.6,
-        shadowRadius: 10,
-        elevation: 8,
+    sizeText: {
+        fontSize: 11,
+        fontWeight: '600',
+        color: '#A78BFA',
+    },
+    getBtn: {
+        backgroundColor: '#7C3AED',
+        paddingHorizontal: 18,
+        paddingVertical: 10,
+        borderRadius: 12,
+        shadowColor: '#7C3AED',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4,
+        shadowRadius: 8,
+        elevation: 5,
+    },
+    getBtnText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '800',
+        letterSpacing: 1,
     },
 });

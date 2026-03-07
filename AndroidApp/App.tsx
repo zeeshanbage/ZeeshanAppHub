@@ -8,7 +8,6 @@ import {
   StatusBar,
   ActivityIndicator,
   RefreshControl,
-  Image,
   Dimensions,
 } from 'react-native';
 import { fetchApps, AppModel } from './src/config/supabase';
@@ -57,14 +56,23 @@ function App(): React.JSX.Element {
   };
 
   const renderHeader = () => (
-    <View style={styles.headerContainer}>
-      <View style={styles.headerTextContainer}>
-        <Text style={styles.greeting}>Welcome back,</Text>
-        <Text style={styles.title}>Zeeshan Hub</Text>
+    <View style={styles.header}>
+      {/* Top bar */}
+      <View style={styles.topBar}>
+        <View>
+          <Text style={styles.greeting}>Welcome back 👋</Text>
+          <Text style={styles.title}>Zeeshan Hub</Text>
+        </View>
+        <View style={styles.avatar}>
+          <Text style={styles.avatarLetter}>Z</Text>
+        </View>
       </View>
-      <View style={styles.profileAvatarContainer}>
-        <View style={styles.profileAvatar}>
-          <Text style={styles.avatarText}>Z</Text>
+
+      {/* Section title */}
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionTitle}>Your Apps</Text>
+        <View style={styles.countBadge}>
+          <Text style={styles.countText}>{apps.length}</Text>
         </View>
       </View>
     </View>
@@ -74,14 +82,17 @@ function App(): React.JSX.Element {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Modern Background Orbs */}
+      {/* Background orbs */}
       <View style={styles.orb1} />
       <View style={styles.orb2} />
+      <View style={styles.orb3} />
 
       {loading && !refreshing ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#00B4D8" style={styles.spinner} />
-          <Text style={styles.loadingText}>Fetching available apps...</Text>
+        <View style={styles.loadingWrap}>
+          <View style={styles.loadingRing}>
+            <ActivityIndicator size="large" color="#A78BFA" />
+          </View>
+          <Text style={styles.loadingText}>Loading apps…</Text>
         </View>
       ) : (
         <FlatList
@@ -95,18 +106,18 @@ function App(): React.JSX.Element {
             <RefreshControl
               refreshing={refreshing}
               onRefresh={onRefresh}
-              tintColor="#00B4D8"
-              colors={['#00B4D8']}
-              progressBackgroundColor="#1E293B"
+              tintColor="#A78BFA"
+              colors={['#7C3AED']}
+              progressBackgroundColor="#161B2E"
             />
           }
           ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <View style={styles.emptyIconContainer}>
-                <Icon name="package-variant" size={80} color="rgba(255, 255, 255, 0.2)" />
+            <View style={styles.emptyWrap}>
+              <View style={styles.emptyIcon}>
+                <Icon name="package-variant" size={56} color="rgba(167, 139, 250, 0.3)" />
               </View>
-              <Text style={styles.emptyTitle}>It's quiet here</Text>
-              <Text style={styles.emptyText}>Upload your first app via the Admin Portal to see it here.</Text>
+              <Text style={styles.emptyTitle}>No apps yet</Text>
+              <Text style={styles.emptyDesc}>Upload your first app via the{'\n'}Admin Portal to see it here.</Text>
             </View>
           }
         />
@@ -124,120 +135,160 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#050814',
+    backgroundColor: '#0A0E1A',
   },
+  // Background decorative orbs
   orb1: {
     position: 'absolute',
-    top: -height * 0.1,
-    left: -width * 0.2,
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    backgroundColor: 'rgba(0, 180, 216, 0.12)',
-    // React Native does not support blurRadius on View natively perfectly on all Androids without specific properties, 
-    // so we rely on low opacity and large size for the gradient effect.
+    top: -height * 0.08,
+    left: -width * 0.25,
+    width: width * 0.7,
+    height: width * 0.7,
+    borderRadius: width * 0.35,
+    backgroundColor: 'rgba(124, 58, 237, 0.08)',
   },
   orb2: {
     position: 'absolute',
-    top: height * 0.4,
+    top: height * 0.35,
     right: -width * 0.3,
-    width: width * 0.9,
-    height: width * 0.9,
-    borderRadius: width * 0.45,
-    backgroundColor: 'rgba(88, 30, 255, 0.08)',
+    width: width * 0.8,
+    height: width * 0.8,
+    borderRadius: width * 0.4,
+    backgroundColor: 'rgba(56, 189, 248, 0.05)',
   },
-  loadingContainer: {
+  orb3: {
+    position: 'absolute',
+    bottom: -height * 0.1,
+    left: width * 0.1,
+    width: width * 0.5,
+    height: width * 0.5,
+    borderRadius: width * 0.25,
+    backgroundColor: 'rgba(167, 139, 250, 0.04)',
+  },
+  // Loading
+  loadingWrap: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  spinner: {
-    transform: [{ scale: 1.2 }],
-    marginBottom: 20,
+  loadingRing: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: 'rgba(167, 139, 250, 0.15)',
   },
   loadingText: {
-    color: '#00B4D8',
-    fontSize: 16,
-    fontWeight: '700',
-    letterSpacing: 0.5,
+    color: '#A78BFA',
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 0.3,
   },
+  // List
   listContent: {
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 20 : 60,
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 56,
     paddingBottom: 40,
   },
-  headerContainer: {
+  // Header
+  header: {
+    paddingHorizontal: 22,
+    marginBottom: 8,
+  },
+  topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 20,
-  },
-  headerTextContainer: {
-    flex: 1,
+    marginBottom: 28,
   },
   greeting: {
-    fontSize: 16,
-    color: '#94A3B8',
-    fontWeight: '600',
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '500',
     marginBottom: 4,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   title: {
-    fontSize: 34,
-    fontWeight: '900',
+    fontSize: 30,
+    fontWeight: '800',
     color: '#F8FAFC',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
-  profileAvatarContainer: {
-    shadowColor: '#00B4D8',
-    shadowOffset: { width: 0, height: 8 },
+  avatar: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: '#7C3AED',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#7C3AED',
+    shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
-    shadowRadius: 16,
+    shadowRadius: 12,
     elevation: 8,
   },
-  profileAvatar: {
-    width: 50,
-    height: 50,
-    borderRadius: 25,
-    backgroundColor: '#00B4D8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#050814',
+  avatarLetter: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '800',
   },
-  avatarText: {
-    color: '#050814',
-    fontSize: 24,
-    fontWeight: '900',
+  sectionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
   },
-  emptyContainer: {
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#CBD5E1',
+    letterSpacing: 0.3,
+  },
+  countBadge: {
+    backgroundColor: 'rgba(124, 58, 237, 0.15)',
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(124, 58, 237, 0.25)',
+  },
+  countText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#A78BFA',
+  },
+  // Empty state
+  emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: height * 0.15,
+    marginTop: height * 0.12,
     paddingHorizontal: 40,
   },
-  emptyIconContainer: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
-    backgroundColor: 'rgba(255, 255, 255, 0.03)',
+  emptyIcon: {
+    width: 100,
+    height: 100,
+    borderRadius: 30,
+    backgroundColor: 'rgba(124, 58, 237, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 20,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.05)',
+    borderColor: 'rgba(167, 139, 250, 0.1)',
   },
   emptyTitle: {
-    color: '#F8FAFC',
-    fontSize: 22,
-    fontWeight: '800',
-    marginBottom: 12,
+    color: '#F1F5F9',
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
   },
-  emptyText: {
-    color: '#94A3B8',
-    fontSize: 15,
+  emptyDesc: {
+    color: '#64748B',
+    fontSize: 14,
     textAlign: 'center',
-    lineHeight: 24,
+    lineHeight: 22,
   },
 });
 
