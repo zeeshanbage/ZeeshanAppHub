@@ -167,3 +167,139 @@ export async function uploadAppAction(formData: FormData) {
         return { success: false, error: error.message || "An unknown error occurred during server-side upload." };
     }
 }
+
+// --- Helper to get Supabase Admin client ---
+function getSupabaseAdmin() {
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    if (!supabaseUrl || !supabaseServiceKey) {
+        throw new Error("Missing Supabase credentials.");
+    }
+    return createClient(supabaseUrl, supabaseServiceKey, {
+        auth: { autoRefreshToken: false, persistSession: false }
+    });
+}
+
+// --- FETCH ALL APPS ---
+export async function fetchAppsAction() {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { data, error } = await supabase
+            .from("apps")
+            .select("*");
+
+        if (error) throw new Error(`Fetch failed: ${error.message}`);
+        return { success: true, data: data || [] };
+    } catch (error: any) {
+        console.error("Fetch Apps Error:", error);
+        return { success: false, error: error.message, data: [] };
+    }
+}
+
+// --- UPDATE APP (name, version, description only) ---
+export async function updateAppAction(id: string, updates: { name: string; version: string; description: string }) {
+    try {
+        const supabase = getSupabaseAdmin();
+        const { error } = await supabase
+            .from("apps")
+            .update({
+                name: updates.name,
+                version: updates.version,
+                description: updates.description,
+            })
+            .eq("id", id);
+
+        if (error) throw new Error(`Update failed: ${error.message}`);
+        return { success: true };
+    } catch (error: any) {
+        console.error("Update App Error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+// --- DELETE APP (also cleans up GitHub Release) ---
+export async function deleteAppAction(id: string) {
+    const githubRepo = "zeeshanbage/ZeeshanAppHub";
+
+    try {
+        const supabase = getSupabaseAdmin();
+
+        // 1. Fetch the app record first to get the apk_url
+        const { data: app, error: fetchError } = await supabase
+            .from("apps")
+            .select("apk_url, icon_url")
+            .eq("id", id)
+            .single();
+
+        if (fetchError) throw new Error(`Failed to fetch app for deletion: ${fetchError.message}`);
+
+        // 2. Try to delete the GitHub Release
+        if (app?.apk_url && app.apk_url.includes("github.com")) {
+            try {
+                // Extract the release tag from the download URL
+                // URL format: https://github.com/owner/repo/releases/download/TAG/filename.apk
+                const urlParts = app.apk_url.split("/");
+                const downloadIndex = urlParts.indexOf("download");
+                if (downloadIndex !== -1 && urlParts[downloadIndex + 1]) {
+                    const releaseTag = urlParts[downloadIndex + 1];
+
+                    // Get the release ID by tag
+                    const releaseData = await githubApiRequest(`/repos/${githubRepo}/releases/tags/${releaseTag}`);
+
+                    // Delete the release
+                    const githubToken = process.env.GITHUB_TOKEN;
+                    const deleteRes = await fetch(`https://api.github.com/repos/${githubRepo}/releases/${releaseData.id}`, {
+                        method: "DELETE",
+                        headers: {
+                            "Authorization": `token ${githubToken}`,
+                            "X-GitHub-Api-Version": "2022-11-28",
+                        },
+                    });
+
+                    // Also delete the git tag
+                    await fetch(`https://api.github.com/repos/${githubRepo}/git/refs/tags/${releaseTag}`, {
+                        method: "DELETE",
+                        headers: {
+                            "Authorization": `token ${githubToken}`,
+                            "X-GitHub-Api-Version": "2022-11-28",
+                        },
+                    });
+
+                    if (deleteRes.ok) {
+                        console.log(`Deleted GitHub Release: ${releaseTag}`);
+                    } else {
+                        console.warn(`GitHub Release deletion returned ${deleteRes.status} — proceeding with DB delete.`);
+                    }
+                }
+            } catch (ghError: any) {
+                // Don't block the DB delete if GitHub cleanup fails
+                console.warn("GitHub Release cleanup failed (proceeding with DB delete):", ghError.message);
+            }
+        }
+
+        // 3. Try to delete the icon from Supabase Storage
+        if (app?.icon_url && app.icon_url.includes("/icons/")) {
+            try {
+                const iconPath = app.icon_url.split("/icons/")[1]?.split("?")[0];
+                if (iconPath) {
+                    await supabase.storage.from("icons").remove([iconPath]);
+                    console.log(`Deleted icon from storage: ${iconPath}`);
+                }
+            } catch (iconErr: any) {
+                console.warn("Icon cleanup failed:", iconErr.message);
+            }
+        }
+
+        // 4. Delete the record from Supabase
+        const { error } = await supabase
+            .from("apps")
+            .delete()
+            .eq("id", id);
+
+        if (error) throw new Error(`Delete failed: ${error.message}`);
+        return { success: true };
+    } catch (error: any) {
+        console.error("Delete App Error:", error);
+        return { success: false, error: error.message };
+    }
+}
