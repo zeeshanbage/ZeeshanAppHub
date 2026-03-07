@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
     View,
     Text,
@@ -9,6 +9,7 @@ import {
     Animated,
     Dimensions,
     ScrollView,
+    BackHandler,
 } from 'react-native';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import { AppModel } from '../config/supabase';
@@ -26,6 +27,53 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
     const [downloading, setDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [isDownloaded, setIsDownloaded] = useState(false);
+
+    // Animation values
+    const slideAnim = useRef(new Animated.Value(height)).current;
+    const scaleAnim = useRef(new Animated.Value(0.92)).current;
+    const backdropAnim = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        if (visible) {
+            Animated.parallel([
+                Animated.spring(slideAnim, {
+                    toValue: 0,
+                    tension: 65,
+                    friction: 11,
+                    useNativeDriver: true,
+                }),
+                Animated.spring(scaleAnim, {
+                    toValue: 1,
+                    tension: 65,
+                    friction: 11,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(backdropAnim, {
+                    toValue: 1,
+                    duration: 300,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        } else {
+            Animated.parallel([
+                Animated.timing(slideAnim, {
+                    toValue: height,
+                    duration: 280,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(scaleAnim, {
+                    toValue: 0.92,
+                    duration: 280,
+                    useNativeDriver: true,
+                }),
+                Animated.timing(backdropAnim, {
+                    toValue: 0,
+                    duration: 250,
+                    useNativeDriver: true,
+                }),
+            ]).start();
+        }
+    }, [visible]);
 
     useEffect(() => {
         if (!app || !visible) return;
@@ -80,30 +128,58 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
 
     return (
         <Modal
-            animationType="slide"
             transparent={true}
             visible={visible}
             onRequestClose={onClose}
+            statusBarTranslucent
+            animationType="none"
         >
             <View style={styles.overlay}>
-                <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+                {/* Animated backdrop */}
+                <Animated.View
+                    style={[
+                        styles.backdrop,
+                        { opacity: backdropAnim },
+                    ]}
+                >
+                    <TouchableOpacity
+                        style={StyleSheet.absoluteFill}
+                        activeOpacity={1}
+                        onPress={onClose}
+                    />
+                </Animated.View>
 
-                <View style={styles.sheet}>
-                    {/* Decorative gradient accent */}
-                    <View style={styles.sheetGlow} />
+                {/* Animated card */}
+                <Animated.View
+                    style={[
+                        styles.card,
+                        {
+                            transform: [
+                                { translateY: slideAnim },
+                                { scale: scaleAnim },
+                            ],
+                        },
+                    ]}
+                >
+                    {/* Top accent line */}
+                    <View style={styles.accentLine} />
 
                     {/* Drag Handle */}
                     <View style={styles.handleRow}>
                         <View style={styles.handle} />
                     </View>
 
-                    {/* Close */}
-                    <TouchableOpacity style={styles.closeBtn} onPress={onClose}>
+                    {/* Close button */}
+                    <TouchableOpacity style={styles.closeBtn} onPress={onClose} activeOpacity={0.7}>
                         <Icon name="close" size={18} color="#94A3B8" />
                     </TouchableOpacity>
 
-                    <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-                        {/* Hero Section */}
+                    <ScrollView
+                        showsVerticalScrollIndicator={false}
+                        contentContainerStyle={styles.scrollContent}
+                        bounces={false}
+                    >
+                        {/* Hero */}
                         <View style={styles.hero}>
                             <View style={styles.iconGlow}>
                                 <View style={styles.iconWrapper}>
@@ -128,12 +204,12 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                         {/* Stats Row */}
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
-                                <Icon name="shield-check" size={20} color="#34D399" />
+                                <Icon name="shield-check-outline" size={20} color="#34D399" />
                                 <Text style={styles.statLabel}>Verified</Text>
                             </View>
                             <View style={styles.statDivider} />
                             <View style={styles.statItem}>
-                                <Icon name="lightning-bolt" size={20} color="#FBBF24" />
+                                <Icon name="lightning-bolt-outline" size={20} color="#FBBF24" />
                                 <Text style={styles.statLabel}>Fast Install</Text>
                             </View>
                             <View style={styles.statDivider} />
@@ -155,7 +231,10 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                         {downloading ? (
                             <View style={styles.progressCard}>
                                 <View style={styles.progressMeta}>
-                                    <Text style={styles.progressLabel}>Downloading…</Text>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                        <Icon name="download" size={16} color="#A78BFA" />
+                                        <Text style={styles.progressLabel}>Downloading</Text>
+                                    </View>
                                     <Text style={styles.progressPct}>{progressPercent}%</Text>
                                 </View>
                                 <View style={styles.progressTrack}>
@@ -182,7 +261,7 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                             </TouchableOpacity>
                         )}
                     </View>
-                </View>
+                </Animated.View>
             </View>
         </Modal>
     );
@@ -192,16 +271,16 @@ const styles = StyleSheet.create({
     overlay: {
         flex: 1,
         justifyContent: 'flex-end',
-        backgroundColor: 'rgba(5, 8, 20, 0.88)',
     },
     backdrop: {
         ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(5, 8, 20, 0.88)',
     },
-    sheet: {
+    card: {
         backgroundColor: '#0F1629',
-        borderTopLeftRadius: 32,
-        borderTopRightRadius: 32,
-        height: height * 0.75,
+        borderTopLeftRadius: 28,
+        borderTopRightRadius: 28,
+        maxHeight: height * 0.78,
         borderWidth: 1,
         borderBottomWidth: 0,
         borderColor: 'rgba(167, 139, 250, 0.1)',
@@ -210,47 +289,48 @@ const styles = StyleSheet.create({
         shadowOffset: { width: 0, height: -10 },
         shadowOpacity: 0.2,
         shadowRadius: 30,
+        overflow: 'hidden',
     },
-    sheetGlow: {
+    accentLine: {
         position: 'absolute',
         top: 0,
-        left: width * 0.15,
-        right: width * 0.15,
+        left: width * 0.2,
+        right: width * 0.2,
         height: 2,
         backgroundColor: '#7C3AED',
         borderRadius: 1,
-        opacity: 0.4,
+        opacity: 0.5,
     },
     handleRow: {
         alignItems: 'center',
         paddingTop: 14,
-        paddingBottom: 10,
+        paddingBottom: 8,
     },
     handle: {
         width: 36,
         height: 4,
         borderRadius: 2,
-        backgroundColor: 'rgba(255, 255, 255, 0.15)',
+        backgroundColor: 'rgba(255, 255, 255, 0.12)',
     },
     closeBtn: {
         position: 'absolute',
-        top: 18,
-        right: 20,
+        top: 16,
+        right: 18,
         zIndex: 10,
         padding: 8,
         backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        borderRadius: 20,
+        borderRadius: 16,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.06)',
     },
     scrollContent: {
         paddingHorizontal: 24,
-        paddingBottom: 20,
+        paddingBottom: 16,
     },
     hero: {
         alignItems: 'center',
-        marginTop: 10,
-        marginBottom: 24,
+        marginTop: 8,
+        marginBottom: 22,
     },
     iconGlow: {
         shadowColor: '#7C3AED',
@@ -258,21 +338,21 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.35,
         shadowRadius: 24,
         elevation: 15,
-        marginBottom: 18,
+        marginBottom: 16,
     },
     iconWrapper: {
-        borderRadius: 28,
+        borderRadius: 26,
         backgroundColor: '#1E2440',
         borderWidth: 2,
         borderColor: 'rgba(167, 139, 250, 0.15)',
         overflow: 'hidden',
     },
     heroIcon: {
-        width: 100,
-        height: 100,
+        width: 96,
+        height: 96,
     },
     heroName: {
-        fontSize: 26,
+        fontSize: 24,
         fontWeight: '800',
         color: '#F8FAFC',
         textAlign: 'center',
@@ -308,10 +388,10 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-around',
-        backgroundColor: 'rgba(255, 255, 255, 0.03)',
+        backgroundColor: 'rgba(255, 255, 255, 0.025)',
         borderRadius: 16,
         paddingVertical: 16,
-        marginBottom: 24,
+        marginBottom: 22,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.04)',
     },
@@ -328,16 +408,16 @@ const styles = StyleSheet.create({
     statDivider: {
         width: 1,
         height: 28,
-        backgroundColor: 'rgba(255, 255, 255, 0.06)',
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
     },
     section: {
-        marginBottom: 20,
+        marginBottom: 16,
     },
     sectionTitle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: '700',
         color: '#E2E8F0',
-        marginBottom: 10,
+        marginBottom: 8,
         letterSpacing: 0.3,
     },
     descText: {
@@ -378,13 +458,14 @@ const styles = StyleSheet.create({
     progressCard: {
         backgroundColor: 'rgba(167, 139, 250, 0.06)',
         borderRadius: 16,
-        padding: 20,
+        padding: 18,
         borderWidth: 1,
         borderColor: 'rgba(167, 139, 250, 0.1)',
     },
     progressMeta: {
         flexDirection: 'row',
         justifyContent: 'space-between',
+        alignItems: 'center',
         marginBottom: 12,
     },
     progressLabel: {

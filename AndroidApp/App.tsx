@@ -1,14 +1,15 @@
 import 'react-native-url-polyfill/auto';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   StyleSheet,
   Text,
   View,
   FlatList,
   StatusBar,
-  ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Animated,
+  Easing,
 } from 'react-native';
 import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
@@ -16,6 +17,67 @@ import { AppDetailsPopup } from './src/components/AppDetailsPopup';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const { width, height } = Dimensions.get('window');
+
+// --- Skeleton Card Component ---
+const SkeletonCard = () => {
+  const shimmer = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(shimmer, {
+          toValue: 1,
+          duration: 1200,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+        Animated.timing(shimmer, {
+          toValue: 0,
+          duration: 1200,
+          easing: Easing.ease,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [shimmer]);
+
+  const opacity = shimmer.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.3, 0.7],
+  });
+
+  return (
+    <View style={skeletonStyles.card}>
+      <Animated.View style={[skeletonStyles.iconBox, { opacity }]} />
+      <View style={skeletonStyles.textArea}>
+        <Animated.View style={[skeletonStyles.lineWide, { opacity }]} />
+        <Animated.View style={[skeletonStyles.lineNarrow, { opacity }]} />
+        <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
+          <Animated.View style={[skeletonStyles.pill, { opacity }]} />
+          <Animated.View style={[skeletonStyles.pill, { opacity, width: 50 }]} />
+        </View>
+      </View>
+      <Animated.View style={[skeletonStyles.btn, { opacity }]} />
+    </View>
+  );
+};
+
+const SkeletonList = () => (
+  <View style={{ paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 56 }}>
+    {/* Skeleton header */}
+    <View style={skeletonStyles.header}>
+      <View>
+        <View style={[skeletonStyles.lineNarrow, { width: 100, marginBottom: 8 }]} />
+        <View style={[skeletonStyles.lineWide, { width: 160, height: 26 }]} />
+      </View>
+      <View style={skeletonStyles.avatarSkel} />
+    </View>
+    <View style={[skeletonStyles.lineNarrow, { width: 80, marginLeft: 22, marginBottom: 16 }]} />
+    {[0, 1, 2, 3].map(i => <SkeletonCard key={i} />)}
+  </View>
+);
 
 function App(): React.JSX.Element {
   const [apps, setApps] = useState<AppModel[]>([]);
@@ -52,15 +114,17 @@ function App(): React.JSX.Element {
 
   const closePopup = () => {
     setPopupVisible(false);
-    setTimeout(() => setSelectedApp(null), 300);
+    setTimeout(() => setSelectedApp(null), 350);
   };
 
   const renderHeader = () => (
     <View style={styles.header}>
-      {/* Top bar */}
       <View style={styles.topBar}>
         <View>
-          <Text style={styles.greeting}>Welcome back 👋</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            <Text style={styles.greeting}>Welcome back</Text>
+            <Icon name="hand-wave" size={16} color="#FBBF24" />
+          </View>
           <Text style={styles.title}>Zeeshan Hub</Text>
         </View>
         <View style={styles.avatar}>
@@ -68,8 +132,8 @@ function App(): React.JSX.Element {
         </View>
       </View>
 
-      {/* Section title */}
       <View style={styles.sectionRow}>
+        <Icon name="apps" size={18} color="#A78BFA" />
         <Text style={styles.sectionTitle}>Your Apps</Text>
         <View style={styles.countBadge}>
           <Text style={styles.countText}>{apps.length}</Text>
@@ -82,18 +146,15 @@ function App(): React.JSX.Element {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
-      {/* Background orbs */}
-      <View style={styles.orb1} />
-      <View style={styles.orb2} />
-      <View style={styles.orb3} />
+      {/* Layered background for depth */}
+      <View style={styles.bgBase} />
+      <View style={styles.bgOrb1} />
+      <View style={styles.bgOrb2} />
+      <View style={styles.bgOrb3} />
+      <View style={styles.bgTopStrip} />
 
       {loading && !refreshing ? (
-        <View style={styles.loadingWrap}>
-          <View style={styles.loadingRing}>
-            <ActivityIndicator size="large" color="#A78BFA" />
-          </View>
-          <Text style={styles.loadingText}>Loading apps…</Text>
-        </View>
+        <SkeletonList />
       ) : (
         <FlatList
           data={apps}
@@ -114,10 +175,10 @@ function App(): React.JSX.Element {
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <View style={styles.emptyIcon}>
-                <Icon name="package-variant" size={56} color="rgba(167, 139, 250, 0.3)" />
+                <Icon name="package-variant" size={48} color="rgba(167, 139, 250, 0.4)" />
               </View>
               <Text style={styles.emptyTitle}>No apps yet</Text>
-              <Text style={styles.emptyDesc}>Upload your first app via the{'\n'}Admin Portal to see it here.</Text>
+              <Text style={styles.emptyDesc}>Upload your first app via the Admin Portal to see it here.</Text>
             </View>
           }
         />
@@ -135,58 +196,47 @@ function App(): React.JSX.Element {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0A0E1A',
+    backgroundColor: '#080B16',
   },
-  // Background decorative orbs
-  orb1: {
+  // Multi-layer background
+  bgBase: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#080B16',
+  },
+  bgOrb1: {
     position: 'absolute',
-    top: -height * 0.08,
-    left: -width * 0.25,
+    top: -height * 0.12,
+    left: -width * 0.3,
+    width: width * 0.9,
+    height: width * 0.9,
+    borderRadius: width * 0.45,
+    backgroundColor: 'rgba(124, 58, 237, 0.06)',
+  },
+  bgOrb2: {
+    position: 'absolute',
+    top: height * 0.4,
+    right: -width * 0.35,
+    width: width,
+    height: width,
+    borderRadius: width * 0.5,
+    backgroundColor: 'rgba(56, 189, 248, 0.035)',
+  },
+  bgOrb3: {
+    position: 'absolute',
+    bottom: -height * 0.15,
+    left: -width * 0.1,
     width: width * 0.7,
     height: width * 0.7,
     borderRadius: width * 0.35,
-    backgroundColor: 'rgba(124, 58, 237, 0.08)',
+    backgroundColor: 'rgba(167, 139, 250, 0.03)',
   },
-  orb2: {
+  bgTopStrip: {
     position: 'absolute',
-    top: height * 0.35,
-    right: -width * 0.3,
-    width: width * 0.8,
-    height: width * 0.8,
-    borderRadius: width * 0.4,
-    backgroundColor: 'rgba(56, 189, 248, 0.05)',
-  },
-  orb3: {
-    position: 'absolute',
-    bottom: -height * 0.1,
-    left: width * 0.1,
-    width: width * 0.5,
-    height: width * 0.5,
-    borderRadius: width * 0.25,
-    backgroundColor: 'rgba(167, 139, 250, 0.04)',
-  },
-  // Loading
-  loadingWrap: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  loadingRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(124, 58, 237, 0.08)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(167, 139, 250, 0.15)',
-  },
-  loadingText: {
-    color: '#A78BFA',
-    fontSize: 15,
-    fontWeight: '600',
-    letterSpacing: 0.3,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: StatusBar.currentHeight ? StatusBar.currentHeight + 80 : 120,
+    backgroundColor: 'rgba(124, 58, 237, 0.04)',
   },
   // List
   listContent: {
@@ -208,14 +258,14 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#64748B',
     fontWeight: '500',
-    marginBottom: 4,
     letterSpacing: 0.3,
   },
   title: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
     color: '#F8FAFC',
     letterSpacing: 0.3,
+    marginTop: 4,
   },
   avatar: {
     width: 46,
@@ -242,7 +292,7 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
     color: '#CBD5E1',
     letterSpacing: 0.3,
@@ -268,13 +318,13 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 30,
+    width: 90,
+    height: 90,
+    borderRadius: 28,
     backgroundColor: 'rgba(124, 58, 237, 0.06)',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    marginBottom: 18,
     borderWidth: 1,
     borderColor: 'rgba(167, 139, 250, 0.1)',
   },
@@ -289,6 +339,68 @@ const styles = StyleSheet.create({
     fontSize: 14,
     textAlign: 'center',
     lineHeight: 22,
+  },
+});
+
+const skeletonStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 20,
+    marginBottom: 14,
+    borderRadius: 20,
+    backgroundColor: '#161B2E',
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.03)',
+  },
+  iconBox: {
+    width: 58,
+    height: 58,
+    borderRadius: 16,
+    backgroundColor: '#1E2440',
+  },
+  textArea: {
+    flex: 1,
+    marginLeft: 14,
+  },
+  lineWide: {
+    width: '75%',
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: '#1E2440',
+    marginBottom: 8,
+  },
+  lineNarrow: {
+    width: '45%',
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1E2440',
+  },
+  pill: {
+    width: 40,
+    height: 18,
+    borderRadius: 6,
+    backgroundColor: '#1E2440',
+  },
+  btn: {
+    width: 62,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: '#1E2440',
+  },
+  header: {
+    paddingHorizontal: 22,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 28,
+  },
+  avatarSkel: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: '#1E2440',
   },
 });
 
