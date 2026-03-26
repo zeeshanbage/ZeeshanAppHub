@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { UploadCloud, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
-import { uploadAppAction } from "@/app/actions";
 
 export default function AdminUploadForm() {
     const [formData, setFormData] = useState({
@@ -13,6 +12,8 @@ export default function AdminUploadForm() {
     const [apkFile, setApkFile] = useState<File | null>(null);
 
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const [uploadPhase, setUploadPhase] = useState<"uploading" | "processing" | "done">("uploading");
     const [status, setStatus] = useState<"idle" | "success" | "error">("idle");
     const [errorMessage, setErrorMessage] = useState("");
 
@@ -39,27 +40,60 @@ export default function AdminUploadForm() {
         setIsUploading(true);
         setStatus("idle");
         setErrorMessage("");
+        setUploadProgress(0);
+        setUploadPhase("uploading");
 
         try {
-            const formDataObj = new FormData();
-            formDataObj.append("name", formData.name);
-            formDataObj.append("version", formData.version);
-            formDataObj.append("description", formData.description);
-            formDataObj.append("apk", apkFile);
+            const body = new FormData();
+            body.append("name", formData.name);
+            body.append("version", formData.version);
+            body.append("description", formData.description);
+            body.append("apk", apkFile);
 
-            // Execute secure Server Action
-            const result = await uploadAppAction(formDataObj);
+            // Use XMLHttpRequest for upload progress tracking
+            const result = await new Promise<{ success: boolean; error?: string }>((resolve, reject) => {
+                const xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener("progress", (e) => {
+                    if (e.lengthComputable) {
+                        const pct = Math.round((e.loaded / e.total) * 100);
+                        setUploadProgress(pct);
+                    }
+                });
+
+                xhr.upload.addEventListener("load", () => {
+                    setUploadPhase("processing");
+                });
+
+                xhr.addEventListener("load", () => {
+                    try {
+                        const data = JSON.parse(xhr.responseText);
+                        if (xhr.status >= 200 && xhr.status < 300) {
+                            setUploadPhase("done");
+                            resolve(data);
+                        } else {
+                            reject(new Error(data.error || `Server error ${xhr.status}`));
+                        }
+                    } catch {
+                        reject(new Error("Invalid response from server."));
+                    }
+                });
+
+                xhr.addEventListener("error", () => reject(new Error("Network error during upload.")));
+                xhr.addEventListener("abort", () => reject(new Error("Upload was cancelled.")));
+
+                xhr.open("POST", "/api/upload");
+                xhr.send(body);
+            });
 
             if (!result.success) {
                 throw new Error(result.error);
             }
 
-            // Success! Reset form
+            // Success!
             setStatus("success");
             setFormData({ name: "", version: "", description: "" });
             setApkFile(null);
-
-            // Reset file input elements to clear their UI display
             const fileInputs = document.querySelectorAll('input[type="file"]') as NodeListOf<HTMLInputElement>;
             fileInputs.forEach(input => input.value = "");
 
@@ -70,6 +104,12 @@ export default function AdminUploadForm() {
         } finally {
             setIsUploading(false);
         }
+    };
+
+    const getProgressLabel = () => {
+        if (uploadPhase === "uploading") return `Uploading… ${uploadProgress}%`;
+        if (uploadPhase === "processing") return "Processing — extracting icon, creating release…";
+        return "Complete!";
     };
 
     return (
@@ -146,6 +186,9 @@ export default function AdminUploadForm() {
                                         <span className="text-sm text-emerald-300 font-medium truncate max-w-full px-2">
                                             {apkFile.name}
                                         </span>
+                                        <span className="text-xs text-slate-500">
+                                            {(apkFile.size / (1024 * 1024)).toFixed(1)} MB
+                                        </span>
                                     </>
                                 ) : (
                                     <>
@@ -160,6 +203,49 @@ export default function AdminUploadForm() {
                         </div>
                     </div>
                 </div>
+
+                {/* ── Progress Bar ── */}
+                {isUploading && (
+                    <div className="space-y-3 p-4 bg-slate-800/50 border border-slate-700/50 rounded-xl">
+                        <div className="flex items-center justify-between text-sm">
+                            <span className="text-slate-300 font-medium flex items-center gap-2">
+                                {uploadPhase === "processing" ? (
+                                    <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
+                                ) : (
+                                    <UploadCloud className="w-4 h-4 text-blue-400" />
+                                )}
+                                {getProgressLabel()}
+                            </span>
+                        </div>
+
+                        {/* Bar */}
+                        <div className="w-full h-2.5 bg-slate-700 rounded-full overflow-hidden">
+                            <div
+                                className={`h-full rounded-full transition-all duration-300 ease-out ${
+                                    uploadPhase === "processing"
+                                        ? "bg-gradient-to-r from-blue-500 to-indigo-500 animate-pulse"
+                                        : "bg-gradient-to-r from-blue-500 to-emerald-500"
+                                }`}
+                                style={{
+                                    width: uploadPhase === "processing" ? "100%" : `${uploadProgress}%`,
+                                }}
+                            />
+                        </div>
+
+                        {/* Steps */}
+                        <div className="flex items-center gap-6 text-xs">
+                            <span className={uploadPhase === "uploading" ? "text-blue-400 font-semibold" : "text-emerald-400"}>
+                                {uploadPhase !== "uploading" ? "✓" : "●"} Upload
+                            </span>
+                            <span className={uploadPhase === "processing" ? "text-blue-400 font-semibold" : uploadPhase === "done" ? "text-emerald-400" : "text-slate-500"}>
+                                {uploadPhase === "done" ? "✓" : uploadPhase === "processing" ? "●" : "○"} Processing
+                            </span>
+                            <span className={uploadPhase === "done" ? "text-emerald-400 font-semibold" : "text-slate-500"}>
+                                {uploadPhase === "done" ? "✓" : "○"} Published
+                            </span>
+                        </div>
+                    </div>
+                )}
 
                 {/* Status Messages */}
                 {status === "error" && (
@@ -185,7 +271,7 @@ export default function AdminUploadForm() {
                     {isUploading ? (
                         <span className="flex items-center justify-center space-x-2">
                             <Loader2 className="w-5 h-5 animate-spin" />
-                            <span>Uploading Application...</span>
+                            <span>{uploadPhase === "uploading" ? `Uploading ${uploadProgress}%` : "Processing…"}</span>
                         </span>
                     ) : (
                         <span className="flex items-center justify-center space-x-2">
