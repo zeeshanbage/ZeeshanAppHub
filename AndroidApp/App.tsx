@@ -10,12 +10,10 @@ import {
   Dimensions,
   Animated,
   Easing,
-  TouchableOpacity,
 } from 'react-native';
 import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
 import { AppDetailsPopup } from './src/components/AppDetailsPopup';
-import { AdminScreen } from './src/components/AdminScreen';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const { width, height } = Dimensions.get('window');
@@ -87,7 +85,6 @@ function App(): React.JSX.Element {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AppModel | null>(null);
   const [popupVisible, setPopupVisible] = useState(false);
-  const [adminVisible, setAdminVisible] = useState(false);
 
   const loadApps = async () => {
     try {
@@ -130,13 +127,9 @@ function App(): React.JSX.Element {
           </View>
           <Text style={styles.title}>Zeeshan Hub</Text>
         </View>
-        <TouchableOpacity
-          style={styles.avatar}
-          onLongPress={() => setAdminVisible(true)}
-          delayLongPress={3000}
-          activeOpacity={0.8}>
+        <View style={styles.avatar}>
           <Text style={styles.avatarLetter}>Z</Text>
-        </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.sectionRow}>
@@ -195,12 +188,6 @@ function App(): React.JSX.Element {
         app={selectedApp}
         visible={popupVisible}
         onClose={closePopup}
-      />
-
-      <AdminScreen
-        visible={adminVisible}
-        onClose={() => setAdminVisible(false)}
-        onRefresh={() => { onRefresh(); }}
       />
     </View>
   );
