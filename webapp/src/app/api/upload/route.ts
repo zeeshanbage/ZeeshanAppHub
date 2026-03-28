@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import AppInfoParser from "app-info-parser";
-import * as fs from "fs/promises";
+import { createWriteStream, createReadStream } from "fs";
+import { unlink, stat } from "fs/promises";
 import * as os from "os";
 import * as path from "path";
+import Busboy from "busboy";
+import { Readable } from "stream";
 
 const githubApiRequest = async (endpoint: string, options: RequestInit = {}) => {
     const githubToken = process.env.GITHUB_TOKEN;
@@ -35,30 +38,66 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "Missing Supabase credentials." }, { status: 500 });
     }
 
+    if (!request.body) {
+        return NextResponse.json({ error: "No request body provided." }, { status: 400 });
+    }
+
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey, {
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    try {
-        const formData = await request.formData();
-        const name = formData.get("name") as string;
-        const version = formData.get("version") as string;
-        const description = formData.get("description") as string;
-        const apkFile = formData.get("apk") as File;
+    const contentType = request.headers.get("content-type") || "";
+    const bb = Busboy({ headers: { "content-type": contentType } });
 
-        if (!name || !version || !description || !apkFile) {
-            return NextResponse.json({ error: "Missing required fields." }, { status: 400 });
+    const formData: Record<string, string> = {};
+    let tempApkPath = "";
+
+    const parsePromise = new Promise<void>((resolve, reject) => {
+        bb.on("field", (name, val) => {
+            formData[name] = val;
+        });
+
+        bb.on("file", (name, file, info) => {
+            if (name === "apk") {
+                const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9-]/g, "");
+                const prefix = formData.name ? sanitize(formData.name) : "app";
+                const tempFileName = `${prefix}_${Date.now()}.apk`;
+                tempApkPath = path.join(os.tmpdir(), tempFileName);
+
+                const writeStream = createWriteStream(tempApkPath);
+                file.pipe(writeStream);
+
+                file.on("error", reject);
+                writeStream.on("error", reject);
+            } else {
+                file.resume();
+            }
+        });
+
+        bb.on("finish", resolve);
+        bb.on("error", reject);
+    });
+
+    try {
+        const nodeStream = Readable.fromWeb(request.body as any);
+        nodeStream.pipe(bb);
+        await parsePromise;
+    } catch (err: any) {
+        console.error("Busboy Parse Error:", err);
+        return NextResponse.json({ error: "Failed to parse form data." }, { status: 400 });
+    }
+
+    try {
+        const { name, version, description } = formData;
+        if (!name || !version || !description || !tempApkPath) {
+            throw new Error("Missing required fields or APK file.");
         }
 
         const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9-]/g, "");
         const releaseTag = `${sanitize(name)}-v${sanitize(version)}`;
         const apkFileName = `${sanitize(name)}_v${sanitize(version)}.apk`;
-        const apkBuffer = await apkFile.arrayBuffer();
 
         // 1. Parse APK for icon
-        const tempApkPath = path.join(os.tmpdir(), apkFileName);
-        await fs.writeFile(tempApkPath, Buffer.from(apkBuffer));
-
         let iconBuffer: Buffer;
         try {
             const parser = new AppInfoParser(tempApkPath);
@@ -66,8 +105,6 @@ export async function POST(request: NextRequest) {
             iconBuffer = Buffer.from(result.icon.replace(/^data:image\/\w+;base64,/, ""), "base64");
         } catch {
             throw new Error("Failed to extract icon from APK.");
-        } finally {
-            await fs.unlink(tempApkPath).catch(() => {});
         }
 
         const iconFileName = `${Date.now()}.png`;
@@ -96,9 +133,15 @@ export async function POST(request: NextRequest) {
             }),
         });
 
-        // 4. Upload APK to GitHub Release
+        // 4. Upload APK to GitHub Release directly via streams
         const uploadUrl = releaseData.upload_url.replace("{?name,label}", `?name=${apkFileName}`);
         const githubToken = process.env.GITHUB_TOKEN;
+
+        const fileSize = await stat(tempApkPath).then(s => s.size);
+        const fileStream = createReadStream(tempApkPath);
+        
+        // Convert Node.js readable to Web stream so fetch processes it directly without buffering
+        const webStream = Readable.toWeb(fileStream);
 
         const uploadRes = await fetch(uploadUrl, {
             method: "POST",
@@ -107,9 +150,12 @@ export async function POST(request: NextRequest) {
                 Authorization: `token ${githubToken}`,
                 "Content-Type": "application/vnd.android.package-archive",
                 "X-GitHub-Api-Version": "2022-11-28",
+                "Content-Length": String(fileSize),
             },
-            body: apkBuffer,
-        });
+            body: webStream as any,
+            // standard config required for streaming bodies in undici/node-fetch
+            duplex: "half",
+        } as any);
 
         if (!uploadRes.ok) {
             const errText = await uploadRes.text();
@@ -132,5 +178,9 @@ export async function POST(request: NextRequest) {
     } catch (error: any) {
         console.error("Upload API Error:", error);
         return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    } finally {
+        if (tempApkPath) {
+            await unlink(tempApkPath).catch(() => {});
+        }
     }
 }
