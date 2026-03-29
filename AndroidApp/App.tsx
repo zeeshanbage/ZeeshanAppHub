@@ -10,12 +10,18 @@ import {
   Dimensions,
   Animated,
   Easing,
+  LogBox,
 } from 'react-native';
+
+LogBox.ignoreLogs([
+    'This method is deprecated (as well as all React Native Firebase namespaced API)',
+]);
 import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
 import { AppDetailsPopup } from './src/components/AppDetailsPopup';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
+import messaging from '@react-native-firebase/messaging';
+import { PermissionsAndroid, Platform } from 'react-native';
 const { width, height } = Dimensions.get('window');
 
 // --- Skeleton Card Component ---
@@ -100,6 +106,59 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     loadApps();
+
+    const requestPermissions = async () => {
+      if (Platform.OS === 'android' && Platform.Version >= 33) {
+        await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+      }
+      const authStatus = await messaging().requestPermission();
+      if (
+        authStatus === messaging.AuthorizationStatus.AUTHORIZED ||
+        authStatus === messaging.AuthorizationStatus.PROVISIONAL
+      ) {
+        messaging().subscribeToTopic('new_releases')
+          .then(() => console.log('Subscribed to "new_releases" topic!'))
+          .catch(e => console.log('Topic subscription error:', e));
+      }
+    };
+    requestPermissions();
+
+    // Handle tapping a notification when app is in background
+    const unsubscribe = messaging().onNotificationOpenedApp(remoteMessage => {
+      if (remoteMessage.data?.appId) {
+        // App id is passed from the admin server
+        setTimeout(() => {
+           setApps(currentApps => {
+               const targetApp = currentApps.find(a => a.id === remoteMessage.data!.appId);
+               if (targetApp) {
+                 setSelectedApp(targetApp);
+                 setPopupVisible(true);
+               }
+               return currentApps;
+           });
+        }, 500);
+      }
+    });
+
+    // Handle opening app from a cold state via notification
+    messaging()
+      .getInitialNotification()
+      .then(remoteMessage => {
+        if (remoteMessage && remoteMessage.data?.appId) {
+          setTimeout(() => {
+             setApps(currentApps => {
+                 const targetApp = currentApps.find(a => a.id === remoteMessage.data!.appId);
+                 if (targetApp) {
+                   setSelectedApp(targetApp);
+                   setPopupVisible(true);
+                 }
+                 return currentApps;
+             });
+          }, 1000);
+        }
+      });
+
+    return unsubscribe;
   }, []);
 
   const onRefresh = () => {

@@ -7,6 +7,7 @@ import * as os from "os";
 import * as path from "path";
 import Busboy from "busboy";
 import { Readable } from "stream";
+import { adminMessaging } from "@/lib/firebase";
 
 const githubApiRequest = async (endpoint: string, options: RequestInit = {}) => {
     const githubToken = process.env.GITHUB_TOKEN;
@@ -88,10 +89,13 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const { name, version, description } = formData;
+        const { name, version, description, notificationTitle, notificationBody } = formData;
         if (!name || !version || !description || !tempApkPath) {
             throw new Error("Missing required fields or APK file.");
         }
+
+        const finalTitle = notificationTitle ? notificationTitle : `🎉 New App Dropped: ${name}!`;
+        const finalBody = notificationBody ? notificationBody : `Version ${version} is officially live on the Hub. Tap to check it out! 🔥`;
 
         const sanitize = (s: string) => s.replace(/[^a-zA-Z0-9-]/g, "");
         const releaseTag = `${sanitize(name)}-v${sanitize(version)}`;
@@ -165,14 +169,41 @@ export async function POST(request: NextRequest) {
         const assetData = await uploadRes.json();
 
         // 5. Save to DB
-        const { error: dbErr } = await supabaseAdmin.from("apps").insert([{
+        const { error: dbErr, data: insertedApp } = await supabaseAdmin.from("apps").insert([{
             name,
             version,
             description,
             icon_url: iconSigned.signedUrl,
             apk_url: assetData.browser_download_url,
-        }]);
+        }]).select("id").single();
+        
         if (dbErr) throw new Error(`Database insert failed: ${dbErr.message}`);
+
+        // 6. Send Push Notification via Firebase
+        if (adminMessaging) {
+            try {
+                const finalTitle = notificationTitle || `🎉 New App Dropped: ${name}!`;
+                const finalBody = notificationBody || `Version ${version} is officially live on the Hub. Tap to check it out! 🔥`;
+                await adminMessaging.send({
+                    topic: "new_releases",
+                    notification: {
+                        title: finalTitle,
+                        body: finalBody,
+                    },
+                    data: {
+                        appId: insertedApp?.id || "",
+                        action: "open_app_details",
+                    },
+                    android: {
+                        priority: "high",
+                        notification: { channelId: "app_updates" }
+                    }
+                });
+                console.log("Firebase push notification sent successfully.");
+            } catch (fcmErr) {
+                console.warn("Firebase push notification failed:", fcmErr);
+            }
+        }
 
         return NextResponse.json({ success: true });
     } catch (error: any) {

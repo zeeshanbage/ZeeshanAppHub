@@ -8,6 +8,8 @@ export default function AdminUploadForm() {
         name: "",
         version: "",
         description: "",
+        notificationTitle: "",
+        notificationBody: "",
     });
     const [apkFile, setApkFile] = useState<File | null>(null);
 
@@ -48,6 +50,8 @@ export default function AdminUploadForm() {
             body.append("name", formData.name);
             body.append("version", formData.version);
             body.append("description", formData.description);
+            if (formData.notificationTitle) body.append("notificationTitle", formData.notificationTitle);
+            if (formData.notificationBody) body.append("notificationBody", formData.notificationBody);
             body.append("apk", apkFile);
 
             // Use XMLHttpRequest for upload progress tracking
@@ -92,7 +96,7 @@ export default function AdminUploadForm() {
 
             // Success!
             setStatus("success");
-            setFormData({ name: "", version: "", description: "" });
+            setFormData({ name: "", version: "", description: "", notificationTitle: "", notificationBody: "" });
             setApkFile(null);
             const fileInputs = document.querySelectorAll('input[type="file"]') as NodeListOf<HTMLInputElement>;
             fileInputs.forEach(input => input.value = "");
@@ -202,6 +206,27 @@ export default function AdminUploadForm() {
                             </div>
                         </div>
                     </div>
+                </div>
+
+                {/* Custom Notification Section */}
+                <div className="pt-4 border-t border-slate-700/50 space-y-3">
+                    <label className="block text-sm font-medium text-slate-300">Custom Push Notification <span className="text-slate-500 text-xs font-normal">(Optional)</span></label>
+                    <input
+                        type="text"
+                        name="notificationTitle"
+                        value={formData.notificationTitle}
+                        onChange={handleInputChange}
+                        className="w-full bg-slate-800/80 border border-slate-600 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                        placeholder="Leave empty for default title"
+                    />
+                    <textarea
+                        name="notificationBody"
+                        value={formData.notificationBody}
+                        onChange={handleInputChange}
+                        rows={2}
+                        className="w-full bg-slate-800/80 border border-slate-600 rounded-lg px-4 py-2.5 text-white text-sm placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all resize-none"
+                        placeholder="Leave empty for default message"
+                    />
                 </div>
 
                 {/* ── Progress Bar ── */}

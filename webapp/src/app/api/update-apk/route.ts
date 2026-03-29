@@ -6,6 +6,7 @@ import * as os from "os";
 import * as path from "path";
 import Busboy from "busboy";
 import { Readable } from "stream";
+import { adminMessaging } from "@/lib/firebase";
 
 const githubApiRequest = async (endpoint: string, options: RequestInit = {}) => {
     const githubToken = process.env.GITHUB_TOKEN;
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const { appId, appName, newVersion, oldApkUrl } = fields;
+        const { appId, appName, newVersion, oldApkUrl, notificationTitle, notificationBody } = fields;
         if (!appId || !appName || !newVersion || !tempApkPath) {
             throw new Error("Missing required fields (appId, appName, newVersion) or APK file.");
         }
@@ -172,11 +173,38 @@ export async function POST(request: NextRequest) {
         const newApkUrl = assetData.browser_download_url;
 
         // 4. Update DB with new version and apk_url
-        const { error: dbErr } = await supabase
+        const { error: dbErr, data: updatedApp } = await supabase
             .from("apps")
             .update({ version: newVersion, apk_url: newApkUrl })
-            .eq("id", appId);
+            .eq("id", appId)
+            .select("icon_url").single();
         if (dbErr) throw new Error(`DB update failed: ${dbErr.message}`);
+
+        // 5. Send Push Notification via Firebase
+        if (adminMessaging) {
+            try {
+                const finalTitle = notificationTitle || `🚀 Update Alert: ${appName}`;
+                const finalBody = notificationBody || `A fresh new update (v${newVersion}) is out now! Tap to get it before everyone else. ✨`;
+                await adminMessaging.send({
+                    topic: "new_releases",
+                    notification: {
+                        title: finalTitle,
+                        body: finalBody,
+                    },
+                    data: {
+                        appId: appId,
+                        action: "open_app_details",
+                    },
+                    android: {
+                        priority: "high",
+                        notification: { channelId: "app_updates" }
+                    }
+                });
+                console.log("Firebase push notification sent successfully (update)");
+            } catch (fcmErr) {
+                console.warn("Firebase push notification failed:", fcmErr);
+            }
+        }
 
         return NextResponse.json({ success: true, apk_url: newApkUrl, version: newVersion });
     } catch (error: any) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Pencil, Trash2, X, Check, Loader2, RefreshCw, AlertCircle, Package, ImagePlus, FileUp } from "lucide-react";
+import { Pencil, Trash2, X, Check, Loader2, RefreshCw, AlertCircle, Package, ImagePlus, FileUp, Bell } from "lucide-react";
 import { fetchAppsAction, updateAppAction, deleteAppAction } from "@/app/actions";
 import { AppModel } from "@/types";
 
@@ -12,7 +12,7 @@ export default function AppList() {
 
     // Edit state
     const [editingId, setEditingId] = useState<string | null>(null);
-    const [editForm, setEditForm] = useState({ name: "", version: "", description: "" });
+    const [editForm, setEditForm] = useState({ name: "", version: "", description: "", notifTitle: "", notifBody: "" });
     const [saving, setSaving] = useState(false);
 
     // Icon update state
@@ -44,13 +44,40 @@ export default function AppList() {
         setLoading(false);
     }, []);
 
+    const [testingId, setTestingId] = useState<string | null>(null);
+
+    const testNotification = async (app: AppModel, customTitle?: string, customBody?: string) => {
+        setTestingId(app.id!);
+        setError("");
+        try {
+            const res = await fetch("/api/test-notification", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    appId: app.id,
+                    appName: app.name,
+                    version: app.version,
+                    iconUrl: app.icon_url,
+                    notificationTitle: customTitle,
+                    notificationBody: customBody
+                })
+            });
+            const data = await res.json();
+            if(!data.success) throw new Error(data.error);
+        } catch(err: any){
+            setError(err.message || "Failed to send test notification");
+        } finally {
+            setTestingId(null);
+        }
+    };
+
     useEffect(() => {
         loadApps();
     }, [loadApps]);
 
     const startEdit = (app: AppModel) => {
         setEditingId(app.id!);
-        setEditForm({ name: app.name, version: app.version, description: app.description });
+        setEditForm({ name: app.name, version: app.version, description: app.description, notifTitle: "", notifBody: "" });
         setConfirmDeleteId(null);
         setIconFile(null);
         setIconPreview(null);
@@ -60,7 +87,7 @@ export default function AppList() {
 
     const cancelEdit = () => {
         setEditingId(null);
-        setEditForm({ name: "", version: "", description: "" });
+        setEditForm({ name: "", version: "", description: "", notifTitle: "", notifBody: "" });
         setIconFile(null);
         setIconPreview(null);
         setApkFile(null);
@@ -139,6 +166,8 @@ export default function AppList() {
             body.append("appName", editForm.name || app.name);
             body.append("newVersion", editForm.version || app.version);
             body.append("oldApkUrl", app.apk_url || "");
+            if (editForm.notifTitle) body.append("notificationTitle", editForm.notifTitle);
+            if (editForm.notifBody) body.append("notificationBody", editForm.notifBody);
             body.append("apk", apkFile);
 
             const result = await new Promise<{ success: boolean; apk_url?: string; version?: string; error?: string }>((resolve, reject) => {
@@ -399,6 +428,38 @@ export default function AppList() {
                                             )}
                                         </div>
 
+                                        {/* Custom Push Config */}
+                                        <div className="p-3 rounded-xl bg-slate-800/20 border border-slate-700/50 space-y-3">
+                                            <div className="flex items-center justify-between text-xs text-slate-400 mb-1">
+                                                <div className="flex items-center gap-2">
+                                                    <Bell className="w-3.5 h-3.5" />
+                                                    <span>Custom Push Notification (Optional)</span>
+                                                </div>
+                                                <button
+                                                    onClick={() => testNotification(app, editForm.notifTitle, editForm.notifBody)}
+                                                    disabled={testingId === app.id}
+                                                    type="button"
+                                                    className="px-2 py-1 rounded-md bg-slate-700 hover:bg-slate-600 text-white transition-all disabled:opacity-50 flex items-center gap-1"
+                                                >
+                                                    {testingId === app.id ? <Loader2 className="w-3 h-3 animate-spin"/> : <Bell className="w-3 h-3"/>}
+                                                    Test Push
+                                                </button>
+                                            </div>
+                                            <input
+                                                value={editForm.notifTitle}
+                                                onChange={(e) => setEditForm(p => ({ ...p, notifTitle: e.target.value }))}
+                                                className="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                                placeholder="Custom Title..."
+                                            />
+                                            <textarea
+                                                value={editForm.notifBody}
+                                                onChange={(e) => setEditForm(p => ({ ...p, notifBody: e.target.value }))}
+                                                rows={2}
+                                                className="w-full bg-slate-800/60 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all resize-none"
+                                                placeholder="Custom Body..."
+                                            />
+                                        </div>
+
                                         {/* Save / Cancel */}
                                         <div className="flex justify-end space-x-2">
                                             <button
@@ -458,6 +519,14 @@ export default function AppList() {
                                                 </>
                                             ) : (
                                                 <>
+                                                    <button
+                                                        onClick={() => testNotification(app)}
+                                                        disabled={testingId === app.id}
+                                                        className="p-2 rounded-lg text-slate-500 hover:text-emerald-400 hover:bg-emerald-500/10 transition-all disabled:opacity-50"
+                                                        title="Test Push Notification"
+                                                    >
+                                                        {testingId === app.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bell className="w-4 h-4" />}
+                                                    </button>
                                                     <button
                                                         onClick={() => startEdit(app)}
                                                         className="p-2 rounded-lg text-slate-500 hover:text-blue-400 hover:bg-blue-500/10 transition-all"
