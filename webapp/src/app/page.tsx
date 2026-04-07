@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Dashboard from "@/components/Dashboard";
 import AdminUploadForm from "@/components/UploadForm";
 import AppList from "@/components/AppList";
-import { UploadCloud, ListChecks } from "lucide-react";
+import { UploadCloud, ListChecks, Activity } from "lucide-react";
 
 const tabs = [
+  { id: "dashboard", label: "Dashboard", icon: Activity },
   { id: "manage", label: "Manage Apps", icon: ListChecks },
   { id: "upload", label: "Upload New", icon: UploadCloud },
 ] as const;
@@ -13,7 +15,7 @@ const tabs = [
 type TabId = typeof tabs[number]["id"];
 
 export default function Home() {
-  const [activeTab, setActiveTab] = useState<TabId>("manage");
+  const [activeTab, setActiveTab] = useState<TabId>("dashboard");
 
   return (
     <main className="min-h-screen bg-[#0B1120] flex flex-col items-center p-4 sm:p-8 relative overflow-hidden">
@@ -57,6 +59,7 @@ export default function Home() {
 
       {/* Main Content Area */}
       <div className="z-10 w-full">
+        {activeTab === "dashboard" && <Dashboard />}
         {activeTab === "upload" && <AdminUploadForm />}
         {activeTab === "manage" && <AppList />}
       </div>

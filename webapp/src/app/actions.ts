@@ -303,3 +303,51 @@ export async function deleteAppAction(id: string) {
         return { success: false, error: error.message };
     }
 }
+
+// --- FETCH TELEMETRY STATS ---
+export async function fetchTelemetryStatsAction() {
+    try {
+        const supabase = getSupabaseAdmin();
+        
+        // Fetch Installs Count & Latest
+        const { count: installCount, error: installCountError } = await supabase
+            .from("installs")
+            .select("*", { count: 'exact', head: true });
+            
+        const { data: latestInstalls, error: installError } = await supabase
+            .from("installs")
+            .select("*")
+            .order("last_opened", { ascending: false })
+            .limit(10);
+
+        if (installCountError) console.error("Error fetching install count:", installCountError);
+        if (installError) console.error("Error fetching installs:", installError);
+
+        // Fetch Issues Count & Latest
+        const { count: issueCount, error: issueCountError } = await supabase
+            .from("error_logs")
+            .select("*", { count: 'exact', head: true });
+            
+        const { data: latestIssues, error: issueError } = await supabase
+            .from("error_logs")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .limit(10);
+
+        if (issueCountError) console.error("Error fetching issue count:", issueCountError);
+        if (issueError) console.error("Error fetching issues:", issueError);
+
+        return { 
+            success: true, 
+            data: {
+                installCount: installCount || 0,
+                latestInstalls: latestInstalls || [],
+                issueCount: issueCount || 0,
+                latestIssues: latestIssues || []
+            }
+        };
+    } catch (error: any) {
+        console.error("Fetch Telemetry Error:", error);
+        return { success: false, error: error.message, data: null };
+    }
+}
