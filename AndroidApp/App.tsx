@@ -11,6 +11,8 @@ import {
   Animated,
   Easing,
   LogBox,
+  Alert,
+  Share,
 } from 'react-native';
 
 LogBox.ignoreLogs([
@@ -22,6 +24,38 @@ import { AppDetailsPopup } from './src/components/AppDetailsPopup';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 import messaging from '@react-native-firebase/messaging';
 import { PermissionsAndroid, Platform } from 'react-native';
+import { setJSExceptionHandler, setNativeExceptionHandler } from 'react-native-exception-handler';
+import { trackInstall, logFatalCrash } from './src/config/telemetry';
+
+// Handle JS Crashes
+setJSExceptionHandler((error, isFatal) => {
+  if (isFatal) {
+    const errorString = `${error.name}: ${error.message}\n${error.stack}`;
+    logFatalCrash(errorString, isFatal);
+    
+    Alert.alert(
+      'Unexpected Error',
+      'The App Hub encountered a critical error. Your crash log has been securely tracked, but you can also share it manually with the developer.',
+      [
+        {
+          text: 'Share Log',
+          onPress: () => {
+             Share.share({ message: `Fatal App Crash Log:\n\n${errorString}` });
+          }
+        },
+        {
+          text: 'Close',
+        }
+      ]
+    );
+  }
+}, true);
+
+// Handle Native Crashes
+setNativeExceptionHandler((errorString) => {
+  logFatalCrash(errorString, true);
+});
+
 const { width, height } = Dimensions.get('window');
 
 // --- Skeleton Card Component ---
@@ -105,6 +139,7 @@ function App(): React.JSX.Element {
   };
 
   useEffect(() => {
+    trackInstall();
     loadApps();
 
     const requestPermissions = async () => {
