@@ -112,7 +112,7 @@ export default function AdminUploadForm() {
 
     const getProgressLabel = () => {
         if (uploadPhase === "uploading") return `Uploading… ${uploadProgress}%`;
-        if (uploadPhase === "processing") return "Processing — extracting icon, creating release…";
+        if (uploadPhase === "processing") return "Processing — extracting icon, uploading to R2…";
         return "Complete!";
     };
 

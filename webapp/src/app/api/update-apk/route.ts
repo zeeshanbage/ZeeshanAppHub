@@ -7,6 +7,17 @@ import * as path from "path";
 import Busboy from "busboy";
 import { Readable } from "stream";
 import { adminMessaging } from "@/lib/firebase";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+
+// Initialize Cloudflare R2 S3 Client
+const s3Client = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.CLOUDFLARE_R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || "",
+    },
+});
 
 const githubApiRequest = async (endpoint: string, options: RequestInit = {}) => {
     const githubToken = process.env.GITHUB_TOKEN;
@@ -96,81 +107,89 @@ export async function POST(request: NextRequest) {
         const releaseTag = `${sanitize(appName)}-v${sanitize(newVersion)}`;
         const apkFileName = `${sanitize(appName)}_v${sanitize(newVersion)}.apk`;
 
-        // 1. Delete old GitHub Release (best-effort)
-        if (oldApkUrl && oldApkUrl.includes("github.com")) {
-            try {
-                const urlParts = oldApkUrl.split("/");
-                const downloadIndex = urlParts.indexOf("download");
-                if (downloadIndex !== -1 && urlParts[downloadIndex + 1]) {
-                    const oldTag = urlParts[downloadIndex + 1];
-                    const githubToken = process.env.GITHUB_TOKEN;
+        // 1. Delete old APK (Cloudflare R2 or GitHub fallback)
+        if (oldApkUrl) {
+            const r2PublicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL || "";
+            const cleanR2PublicUrl = r2PublicUrl.replace(/https?:\/\//, "").replace(/\/$/, "");
 
-                    const releaseData = await githubApiRequest(`/repos/${githubRepo}/releases/tags/${oldTag}`);
+            if (oldApkUrl.includes(cleanR2PublicUrl) || oldApkUrl.includes(".r2.dev")) {
+                try {
+                    let r2Key = "";
+                    const urlObj = new URL(oldApkUrl);
+                    r2Key = urlObj.pathname.substring(1); // Remove leading slash
 
-                    await fetch(`https://api.github.com/repos/${githubRepo}/releases/${releaseData.id}`, {
-                        method: "DELETE",
-                        headers: {
-                            Authorization: `token ${githubToken}`,
-                            "X-GitHub-Api-Version": "2022-11-28",
-                        },
-                    });
-
-                    await fetch(`https://api.github.com/repos/${githubRepo}/git/refs/tags/${oldTag}`, {
-                        method: "DELETE",
-                        headers: {
-                            Authorization: `token ${githubToken}`,
-                            "X-GitHub-Api-Version": "2022-11-28",
-                        },
-                    });
-
-                    console.log(`Deleted old GitHub Release: ${oldTag}`);
+                    if (r2Key) {
+                        const r2Bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME;
+                        console.log(`Deleting old APK from Cloudflare R2: ${r2Key} in bucket ${r2Bucket}`);
+                        await s3Client.send(
+                            new DeleteObjectCommand({
+                                Bucket: r2Bucket,
+                                Key: r2Key,
+                            })
+                        );
+                        console.log(`Deleted old APK from R2: ${r2Key}`);
+                    }
+                } catch (r2Error: any) {
+                    console.warn("Cloudflare R2 old APK cleanup failed:", r2Error.message);
                 }
-            } catch (e: any) {
-                console.warn("Old release cleanup failed:", e.message);
+            } else if (oldApkUrl.includes("github.com")) {
+                try {
+                    const urlParts = oldApkUrl.split("/");
+                    const downloadIndex = urlParts.indexOf("download");
+                    if (downloadIndex !== -1 && urlParts[downloadIndex + 1]) {
+                        const oldTag = urlParts[downloadIndex + 1];
+                        const githubToken = process.env.GITHUB_TOKEN;
+
+                        const releaseData = await githubApiRequest(`/repos/${githubRepo}/releases/tags/${oldTag}`);
+
+                        await fetch(`https://api.github.com/repos/${githubRepo}/releases/${releaseData.id}`, {
+                            method: "DELETE",
+                            headers: {
+                                Authorization: `token ${githubToken}`,
+                                "X-GitHub-Api-Version": "2022-11-28",
+                            },
+                        });
+
+                        await fetch(`https://api.github.com/repos/${githubRepo}/git/refs/tags/${oldTag}`, {
+                            method: "DELETE",
+                            headers: {
+                                Authorization: `token ${githubToken}`,
+                                "X-GitHub-Api-Version": "2022-11-28",
+                            },
+                        });
+
+                        console.log(`Deleted old GitHub Release: ${oldTag}`);
+                    }
+                } catch (e: any) {
+                    console.warn("Old GitHub release cleanup failed:", e.message);
+                }
             }
         }
 
-        // 2. Create new GitHub Release
-        const releaseData = await githubApiRequest(`/repos/${githubRepo}/releases`, {
-            method: "POST",
-            body: JSON.stringify({
-                tag_name: releaseTag,
-                name: `${appName} - Version ${newVersion}`,
-                body: `Updated release for ${appName} v${newVersion}.`,
-                draft: false,
-                prerelease: false,
-                generate_release_notes: false,
-            }),
-        });
+        // 2. Upload new APK to Cloudflare R2 via stream
+        const r2Bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME;
+        const r2PublicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL;
 
-        // 3. Upload APK to GitHub via stream
-        const uploadUrl = releaseData.upload_url.replace("{?name,label}", `?name=${apkFileName}`);
-        const githubToken = process.env.GITHUB_TOKEN;
-
-        const fileSize = await stat(tempApkPath).then(s => s.size);
-        const fileStream = createReadStream(tempApkPath);
-        const webStream = Readable.toWeb(fileStream);
-
-        const uploadRes = await fetch(uploadUrl, {
-            method: "POST",
-            headers: {
-                Accept: "application/vnd.github.v3+json",
-                Authorization: `token ${githubToken}`,
-                "Content-Type": "application/vnd.android.package-archive",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Content-Length": String(fileSize),
-            },
-            body: webStream as any,
-            duplex: "half",
-        } as any);
-
-        if (!uploadRes.ok) {
-            const errText = await uploadRes.text();
-            throw new Error(`APK upload to GitHub failed: ${errText}`);
+        if (!r2Bucket || !r2PublicUrl) {
+            throw new Error("Missing Cloudflare R2 environment credentials.");
         }
 
-        const assetData = await uploadRes.json();
-        const newApkUrl = assetData.browser_download_url;
+        const r2Key = `apks/${apkFileName}`;
+        console.log(`Uploading streaming new APK to R2: ${r2Key}`);
+
+        const fileStream = createReadStream(tempApkPath);
+
+        await s3Client.send(
+            new PutObjectCommand({
+                Bucket: r2Bucket,
+                Key: r2Key,
+                Body: fileStream,
+                ContentType: "application/vnd.android.package-archive",
+            })
+        );
+
+        const newApkUrl = `${r2PublicUrl.replace(/\/$/, "")}/${r2Key}`;
+        console.log(`Successfully uploaded new APK to R2! URL: ${newApkUrl}`);
 
         // 4. Update DB with new version and apk_url
         const { error: dbErr, data: updatedApp } = await supabase

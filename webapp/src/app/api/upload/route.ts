@@ -8,32 +8,21 @@ import * as path from "path";
 import Busboy from "busboy";
 import { Readable } from "stream";
 import { adminMessaging } from "@/lib/firebase";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 
-const githubApiRequest = async (endpoint: string, options: RequestInit = {}) => {
-    const githubToken = process.env.GITHUB_TOKEN;
-    if (!githubToken) throw new Error("Missing GITHUB_TOKEN");
-
-    const res = await fetch(`https://api.github.com${endpoint}`, {
-        ...options,
-        headers: {
-            Accept: "application/vnd.github.v3+json",
-            Authorization: `token ${githubToken}`,
-            "X-GitHub-Api-Version": "2022-11-28",
-            ...options.headers,
-        },
-    });
-
-    if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(`GitHub API Error (${res.status}): ${errorText}`);
-    }
-    return res.json();
-};
+// Initialize Cloudflare R2 S3 Client
+const s3Client = new S3Client({
+    region: "auto",
+    endpoint: `https://${process.env.CLOUDFLARE_R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+    credentials: {
+        accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || "",
+        secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || "",
+    },
+});
 
 export async function POST(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
     const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-    const githubRepo = "zeeshanbage/ZeeshanAppHub";
 
     if (!supabaseUrl || !supabaseServiceKey) {
         return NextResponse.json({ error: "Missing Supabase credentials." }, { status: 500 });
@@ -124,57 +113,38 @@ export async function POST(request: NextRequest) {
             .createSignedUrl(iconFileName, 60 * 60 * 24 * 365 * 100);
         if (signErr || !iconSigned) throw new Error(`Icon sign failed: ${signErr?.message}`);
 
-        // 3. Create GitHub Release
-        const releaseData = await githubApiRequest(`/repos/${githubRepo}/releases`, {
-            method: "POST",
-            body: JSON.stringify({
-                tag_name: releaseTag,
-                name: `${name} - Version ${version}`,
-                body: `Release for ${name} v${version}.\n\n${description}`,
-                draft: false,
-                prerelease: false,
-                generate_release_notes: false,
-            }),
-        });
+        // 3. Upload APK to Cloudflare R2 via stream
+        const r2Bucket = process.env.CLOUDFLARE_R2_BUCKET_NAME;
+        const r2PublicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL;
 
-        // 4. Upload APK to GitHub Release directly via streams
-        const uploadUrl = releaseData.upload_url.replace("{?name,label}", `?name=${apkFileName}`);
-        const githubToken = process.env.GITHUB_TOKEN;
-
-        const fileSize = await stat(tempApkPath).then(s => s.size);
-        const fileStream = createReadStream(tempApkPath);
-        
-        // Convert Node.js readable to Web stream so fetch processes it directly without buffering
-        const webStream = Readable.toWeb(fileStream);
-
-        const uploadRes = await fetch(uploadUrl, {
-            method: "POST",
-            headers: {
-                Accept: "application/vnd.github.v3+json",
-                Authorization: `token ${githubToken}`,
-                "Content-Type": "application/vnd.android.package-archive",
-                "X-GitHub-Api-Version": "2022-11-28",
-                "Content-Length": String(fileSize),
-            },
-            body: webStream as any,
-            // standard config required for streaming bodies in undici/node-fetch
-            duplex: "half",
-        } as any);
-
-        if (!uploadRes.ok) {
-            const errText = await uploadRes.text();
-            throw new Error(`APK upload to GitHub failed: ${errText}`);
+        if (!r2Bucket || !r2PublicUrl) {
+            throw new Error("Missing Cloudflare R2 environment credentials.");
         }
 
-        const assetData = await uploadRes.json();
+        const r2Key = `apks/${apkFileName}`;
+        console.log(`Uploading streaming APK to R2: ${r2Key}`);
 
-        // 5. Save to DB
+        const fileStream = createReadStream(tempApkPath);
+
+        await s3Client.send(
+            new PutObjectCommand({
+                Bucket: r2Bucket,
+                Key: r2Key,
+                Body: fileStream,
+                ContentType: "application/vnd.android.package-archive",
+            })
+        );
+
+        const r2DownloadUrl = `${r2PublicUrl.replace(/\/$/, "")}/${r2Key}`;
+        console.log(`Successfully uploaded to R2! URL: ${r2DownloadUrl}`);
+
+        // 4. Save to DB
         const { error: dbErr, data: insertedApp } = await supabaseAdmin.from("apps").insert([{
             name,
             version,
             description,
             icon_url: iconSigned.signedUrl,
-            apk_url: assetData.browser_download_url,
+            apk_url: r2DownloadUrl,
         }]).select("id").single();
         
         if (dbErr) throw new Error(`Database insert failed: ${dbErr.message}`);

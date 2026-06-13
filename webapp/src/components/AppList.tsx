@@ -410,7 +410,7 @@ export default function AppList() {
                                                                 />
                                                             </div>
                                                             <p className="text-[10px] text-slate-500">
-                                                                {apkPhase === "uploading" ? `Uploading… ${apkProgress}%` : "Processing — creating release…"}
+                                                                {apkPhase === "uploading" ? `Uploading… ${apkProgress}%` : "Processing — uploading to R2…"}
                                                             </p>
                                                         </div>
                                                     )}
