@@ -10,6 +10,7 @@ type InstallRecord = {
   brand: string;
   model: string;
   system_version: string;
+  installed_at: string;
   last_opened: string;
 };
 
@@ -112,29 +113,39 @@ export default function Dashboard() {
       {/* Grid for lists */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
-        {/* Recent Installs */}
+        {/* All Installs */}
         <div className="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-700/50 overflow-hidden flex flex-col max-h-[500px]">
           <div className="p-4 bg-slate-800/50 border-b border-slate-700/50 flex items-center justify-between">
              <h3 className="font-semibold text-slate-200 flex items-center gap-2">
-               <Download className="w-4 h-4 text-blue-400" /> Recent Installs
+               <Download className="w-4 h-4 text-blue-400" /> Active Installs
              </h3>
-             <span className="text-xs px-2 py-1 bg-slate-700/50 text-slate-400 rounded-md">Last 10</span>
+             <span className="text-xs px-2 py-1 bg-slate-700/50 text-slate-400 rounded-md">All Tracked</span>
           </div>
           <div className="overflow-y-auto p-4 space-y-3 custom-scrollbar">
             {data?.latestInstalls?.length === 0 ? (
-                <p className="text-slate-500 text-sm text-center py-4">No recent installs found.</p>
+                <p className="text-slate-500 text-sm text-center py-4">No active installs found.</p>
             ) : (
                 data?.latestInstalls?.map((install) => (
                   <div key={install.id} className="bg-slate-800/40 rounded-xl p-3 border border-slate-700/30 flex justify-between items-center hover:bg-slate-800/60 transition-colors">
-                    <div className="flex flex-col">
-                      <div className="flex items-center gap-2">
-                        <MonitorSmartphone className="w-4 h-4 text-slate-400" />
-                        <span className="text-sm font-medium text-slate-200">{install.brand} {install.model || 'Unknown Device'}</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">OS {install.system_version}</span>
+                    <div className="flex flex-col w-full">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <MonitorSmartphone className="w-4 h-4 text-slate-400" />
+                          <span className="text-sm font-medium text-slate-200">{install.brand} {install.model || 'Unknown Device'}</span>
+                          <span className="text-xs px-1.5 py-0.5 rounded-md bg-blue-500/10 text-blue-400 border border-blue-500/20">OS {install.system_version}</span>
+                        </div>
+                        <span className="text-xs text-slate-500 font-mono">ID: {install.device_id.substring(0, 8)}...</span>
                       </div>
-                      <span className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                         <Calendar className="w-3 h-3" /> {new Date(install.last_opened).toLocaleString()} • ID: {install.device_id.substring(0, 8)}...
-                      </span>
+                      <div className="grid grid-cols-2 gap-2 mt-2 pt-2 border-t border-slate-800/30 text-xs">
+                        <div className="text-slate-400 flex flex-col">
+                          <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Installed At</span>
+                          <span className="mt-0.5 font-medium">{install.installed_at ? new Date(install.installed_at).toLocaleString() : 'N/A'}</span>
+                        </div>
+                        <div className="text-slate-400 flex flex-col">
+                          <span className="text-slate-500 text-[10px] uppercase font-bold tracking-wider">Last Opened</span>
+                          <span className="mt-0.5 font-medium">{install.last_opened ? new Date(install.last_opened).toLocaleString() : 'N/A'}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 ))

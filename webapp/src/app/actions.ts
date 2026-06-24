@@ -338,8 +338,7 @@ export async function fetchTelemetryStatsAction() {
         const { data: latestInstalls, error: installError } = await supabase
             .from("installs")
             .select("*")
-            .order("last_opened", { ascending: false })
-            .limit(10);
+            .order("last_opened", { ascending: false });
 
         if (installCountError) console.error("Error fetching install count:", installCountError);
         if (installError) console.error("Error fetching installs:", installError);
