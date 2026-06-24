@@ -5,4 +5,5 @@ export interface AppModel {
     icon_url: string;
     apk_url: string;
     description: string;
+    package_name?: string;
 }

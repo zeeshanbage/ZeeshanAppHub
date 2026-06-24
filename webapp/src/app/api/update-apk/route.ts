@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import AppInfoParser from "app-info-parser";
 import { createWriteStream, createReadStream } from "fs";
 import { unlink, stat } from "fs/promises";
 import * as os from "os";
@@ -191,10 +192,24 @@ export async function POST(request: NextRequest) {
         const newApkUrl = `${r2PublicUrl.replace(/\/$/, "")}/${r2Key}`;
         console.log(`Successfully uploaded new APK to R2! URL: ${newApkUrl}`);
 
-        // 4. Update DB with new version and apk_url
+        // Parse package name from new APK
+        let packageName = "";
+        try {
+            const parser = new AppInfoParser(tempApkPath);
+            const result = await parser.parse();
+            packageName = result.package;
+        } catch (parseErr: any) {
+            console.warn("Failed to parse package name from update APK:", parseErr.message);
+        }
+
+        // 4. Update DB with new version, apk_url and package_name
+        const updatePayload: any = { version: newVersion, apk_url: newApkUrl };
+        if (packageName) {
+            updatePayload.package_name = packageName;
+        }
         const { error: dbErr, data: updatedApp } = await supabase
             .from("apps")
-            .update({ version: newVersion, apk_url: newApkUrl })
+            .update(updatePayload)
             .eq("id", appId)
             .select("icon_url").single();
         if (dbErr) throw new Error(`DB update failed: ${dbErr.message}`);

@@ -90,14 +90,16 @@ export async function POST(request: NextRequest) {
         const releaseTag = `${sanitize(name)}-v${sanitize(version)}`;
         const apkFileName = `${sanitize(name)}_v${sanitize(version)}.apk`;
 
-        // 1. Parse APK for icon
+        // 1. Parse APK for icon and package name
         let iconBuffer: Buffer;
+        let packageName = "";
         try {
             const parser = new AppInfoParser(tempApkPath);
             const result = await parser.parse();
             iconBuffer = Buffer.from(result.icon.replace(/^data:image\/\w+;base64,/, ""), "base64");
+            packageName = result.package;
         } catch {
-            throw new Error("Failed to extract icon from APK.");
+            throw new Error("Failed to extract icon or parse package name from APK.");
         }
 
         const iconFileName = `${Date.now()}.png`;
@@ -145,6 +147,7 @@ export async function POST(request: NextRequest) {
             description,
             icon_url: iconSigned.signedUrl,
             apk_url: r2DownloadUrl,
+            package_name: packageName,
         }]).select("id").single();
         
         if (dbErr) throw new Error(`Database insert failed: ${dbErr.message}`);

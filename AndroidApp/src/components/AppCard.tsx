@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppModel } from '../config/supabase';
+import { AppCheckService, getFallbackPackageName } from '../services/AppCheckService';
 
 interface AppCardProps {
     app: AppModel;
@@ -11,6 +12,33 @@ interface AppCardProps {
 const { width } = Dimensions.get('window');
 
 export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
+    const [btnText, setBtnText] = useState<'GET' | 'OPEN' | 'UPDATE'>('GET');
+    const pkgName = app.package_name || getFallbackPackageName(app.name);
+
+    useEffect(() => {
+        const checkStatus = async () => {
+            const info = await AppCheckService.getAppInfo(pkgName);
+            if (info.isInstalled) {
+                if (info.versionName !== app.version) {
+                    setBtnText('UPDATE');
+                } else {
+                    setBtnText('OPEN');
+                }
+            } else {
+                setBtnText('GET');
+            }
+        };
+        checkStatus();
+    }, [app.version, pkgName]);
+
+    const handleBtnPress = async () => {
+        if (btnText === 'OPEN') {
+            await AppCheckService.launchApp(pkgName);
+        } else {
+            onPress(app);
+        }
+    };
+
     return (
         <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => onPress(app)}>
             {/* Accent stripe */}
@@ -48,8 +76,12 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
                 </View>
 
                 {/* Get Button */}
-                <TouchableOpacity style={styles.getBtn} activeOpacity={0.7} onPress={() => onPress(app)}>
-                    <Text style={styles.getBtnText}>GET</Text>
+                <TouchableOpacity 
+                    style={[styles.getBtn, btnText === 'OPEN' && styles.openBtn]} 
+                    activeOpacity={0.7} 
+                    onPress={handleBtnPress}
+                >
+                    <Text style={styles.getBtnText}>{btnText}</Text>
                 </TouchableOpacity>
             </View>
         </TouchableOpacity>
@@ -195,7 +227,7 @@ const styles = StyleSheet.create({
     },
     getBtn: {
         backgroundColor: '#7C3AED',
-        paddingHorizontal: 18,
+        paddingHorizontal: 16,
         paddingVertical: 10,
         borderRadius: 12,
         shadowColor: '#7C3AED',
@@ -203,11 +235,17 @@ const styles = StyleSheet.create({
         shadowOpacity: 0.4,
         shadowRadius: 8,
         elevation: 5,
+        minWidth: 72,
+        alignItems: 'center',
+    },
+    openBtn: {
+        backgroundColor: '#059669',
+        shadowColor: '#059669',
     },
     getBtnText: {
         color: '#FFFFFF',
-        fontSize: 13,
+        fontSize: 12,
         fontWeight: '800',
-        letterSpacing: 1,
+        letterSpacing: 0.8,
     },
 });

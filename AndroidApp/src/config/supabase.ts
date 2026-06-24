@@ -15,6 +15,7 @@ export interface AppModel {
     download_count?: number;
     created_at?: string;
     tag?: 'NEW' | 'MOST DOWNLOADED' | null;
+    package_name?: string;
 }
 
 // Temporary Mock Data for UI Development

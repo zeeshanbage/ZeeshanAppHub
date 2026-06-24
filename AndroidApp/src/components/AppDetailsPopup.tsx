@@ -14,6 +14,7 @@ import {
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppModel, incrementDownloadCount } from '../config/supabase';
 import { DownloadInstallService } from '../services/DownloadInstallService';
+import { AppCheckService, getFallbackPackageName } from '../services/AppCheckService';
 
 interface AppDetailsPopupProps {
     app: AppModel | null;
@@ -27,6 +28,7 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
     const [downloading, setDownloading] = useState(false);
     const [progress, setProgress] = useState(0);
     const [isDownloaded, setIsDownloaded] = useState(false);
+    const [installedInfo, setInstalledInfo] = useState<{ isInstalled: boolean; versionName?: string }>({ isInstalled: false });
 
     // Animation values
     const slideAnim = useRef(new Animated.Value(height)).current;
@@ -90,6 +92,10 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                 setDownloading(false);
                 setProgress(0);
             }
+
+            const pkgName = app.package_name || getFallbackPackageName(app.name);
+            const info = await AppCheckService.getAppInfo(pkgName);
+            setInstalledInfo(info);
         };
 
         checkStatus();
@@ -100,6 +106,8 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
             if (prog >= 1) {
                 setDownloading(false);
                 setIsDownloaded(true);
+                // Re-check installed status after a download finishes
+                setTimeout(checkStatus, 2000);
             }
         };
 
@@ -113,8 +121,13 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
     if (!app) return null;
 
     const handleAction = async () => {
-        const fileName = `${app.name.replace(/\s+/g, '_')}_v${app.version}.apk`;
+        const pkgName = app.package_name || getFallbackPackageName(app.name);
+        if (installedInfo.isInstalled && installedInfo.versionName === app.version) {
+            await AppCheckService.launchApp(pkgName);
+            return;
+        }
 
+        const fileName = `${app.name.replace(/\s+/g, '_')}_v${app.version}.apk`;
         if (isDownloaded) {
             await DownloadInstallService.installExistingApk(fileName);
         } else {
@@ -259,18 +272,28 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                         ) : (
                             <View style={{ flexDirection: 'row', gap: 12 }}>
                                 <TouchableOpacity
-                                    style={[styles.actionBtn, isDownloaded && styles.actionBtnGreen, { flex: 1 }]}
+                                    style={[
+                                        styles.actionBtn,
+                                        ((installedInfo.isInstalled && installedInfo.versionName === app.version) || (!installedInfo.isInstalled && isDownloaded)) && styles.actionBtnGreen,
+                                        { flex: 1 }
+                                    ]}
                                     activeOpacity={0.85}
                                     onPress={handleAction}
                                 >
                                     <Icon
-                                        name={isDownloaded ? 'check-decagram' : 'download'}
+                                        name={
+                                            installedInfo.isInstalled
+                                                ? (installedInfo.versionName === app.version ? 'open-in-new' : 'arrow-up-bold-circle')
+                                                : (isDownloaded ? 'check-decagram' : 'download')
+                                        }
                                         size={22}
                                         color="#FFFFFF"
                                         style={{ marginRight: 10 }}
                                     />
                                     <Text style={styles.actionBtnText}>
-                                        {isDownloaded ? 'Install' : 'Download & Install'}
+                                        {installedInfo.isInstalled
+                                            ? (installedInfo.versionName === app.version ? 'Open' : 'Update')
+                                            : (isDownloaded ? 'Install' : 'Download & Install')}
                                     </Text>
                                 </TouchableOpacity>
 
