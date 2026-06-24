@@ -17,7 +17,7 @@ export const getFallbackPackageName = (appName: string): string => {
     if (name.includes('capcut')) return 'com.lemon.lv.overseas';
     if (name.includes('moviebox')) return 'com.movieboxpro.android';
     if (name.includes('microg')) return 'com.mgoogle.android.gms';
-    if (name.includes('netmirror')) return 'com.netmirror.app';
+    if (name.includes('netmirror')) return 'app.netmirror.netmirrornew';
     if (name.includes('photos')) return 'com.google.android.apps.photos';
     if (name.includes('sporzx')) return 'com.sporzx.tv';
     if (name.includes('instagram')) return 'com.instagram.android';

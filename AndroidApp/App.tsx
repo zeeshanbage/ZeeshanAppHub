@@ -22,6 +22,7 @@ import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
 import { AppDetailsPopup } from './src/components/AppDetailsPopup';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
+import { AppCheckService, getFallbackPackageName } from './src/services/AppCheckService';
 import messaging from '@react-native-firebase/messaging';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { trackInstall, logFatalCrash } from './src/config/telemetry';
@@ -171,8 +172,8 @@ function App(): React.JSX.Element {
         }
       });
 
-      // 3. Assign tags
-      const processedData = appsWithMetrics.map(app => {
+      // 3. Assign tags and check installation status
+      const processedData = await Promise.all(appsWithMetrics.map(async (app) => {
         let tag: 'NEW' | 'MOST DOWNLOADED' | null = null;
         
         if (app.download_count && app.download_count === maxDownloads && maxDownloads > 0) {
@@ -184,10 +185,29 @@ function App(): React.JSX.Element {
           }
         }
 
-        return { ...app, tag };
+        const pkgName = app.package_name || getFallbackPackageName(app.name);
+        const info = await AppCheckService.getAppInfo(pkgName);
+
+        return { 
+          ...app, 
+          tag,
+          isInstalled: info.isInstalled,
+          isUpdateAvailable: info.isInstalled && info.versionName !== app.version
+        };
+      }));
+
+      // Sort: Installed apps on top, updates prioritized on top of those
+      const sortedData = processedData.sort((a, b) => {
+        if (a.isInstalled && !b.isInstalled) return -1;
+        if (!a.isInstalled && b.isInstalled) return 1;
+        if (a.isInstalled && b.isInstalled) {
+          if (a.isUpdateAvailable && !b.isUpdateAvailable) return -1;
+          if (!a.isUpdateAvailable && b.isUpdateAvailable) return 1;
+        }
+        return 0;
       });
 
-      setApps(processedData);
+      setApps(sortedData);
     } catch (error) {
       console.error('loadApps error:', error);
     } finally {
@@ -268,6 +288,8 @@ function App(): React.JSX.Element {
   const closePopup = () => {
     setPopupVisible(false);
     setTimeout(() => setSelectedApp(null), 350);
+    // Refresh apps list to update sorting and status immediately
+    loadApps();
   };
 
   const renderHeader = () => (
