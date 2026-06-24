@@ -1,0 +1,8 @@
+# Development Guidelines & Rules
+
+Please follow these guidelines strictly when working on the ZeeshanAppHub codebase:
+
+1. **Do Not Push Directly**: Never run `git push` directly. All changes must be reviewed and tested locally.
+2. **No Automated/Browser UI Testing**: Do NOT run browser subagents or automated testing tools/scripts yourself (to save tokens). The user will perform all testing and verify the changes on the UI.
+3. **Local Dev Server**: When you make changes, run the local development server (e.g., `npm run dev`) so that the application is ready for the user to test and view.
+4. **Commit Process**: Only stage and commit changes (`git commit`) locally after the user has tested and verified that they work. Do not push; the user will handle pushing the commits.

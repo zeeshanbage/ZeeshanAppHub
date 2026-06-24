@@ -32,9 +32,19 @@ const packageName = "com.zeeshan.apphub";
 console.log(`Publishing Hub update for ${appName} (${packageName}), version ${version}...`);
 
 // 3. Locate the compiled APK file
-const apkPath = path.join(__dirname, '../android/app/build/outputs/apk/release/app-arm64-v8a-release.apk');
-if (!fs.existsSync(apkPath)) {
-    console.error('Error: Compiled APK not found at', apkPath);
+const apkPaths = [
+    path.join(__dirname, '../android/app/build/outputs/apk/release/app-release.apk'),
+    path.join(__dirname, '../android/app/build/outputs/apk/release/app-arm64-v8a-release.apk')
+];
+let apkPath = '';
+for (const p of apkPaths) {
+    if (fs.existsSync(p)) {
+        apkPath = p;
+        break;
+    }
+}
+if (!apkPath) {
+    console.error('Error: Compiled APK not found at either path:', apkPaths.join(' or '));
     process.exit(1);
 }
 
