@@ -22,7 +22,7 @@ import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
 import { AppDetailsPopup } from './src/components/AppDetailsPopup';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import { AppCheckService, getFallbackPackageName } from './src/services/AppCheckService';
+import { AppCheckService, getFallbackPackageName, isUpdateRequired } from './src/services/AppCheckService';
 import messaging from '@react-native-firebase/messaging';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { trackInstall, logFatalCrash } from './src/config/telemetry';
@@ -192,7 +192,7 @@ function App(): React.JSX.Element {
           ...app, 
           tag,
           isInstalled: info.isInstalled,
-          isUpdateAvailable: info.isInstalled && info.versionName !== app.version
+          isUpdateAvailable: isUpdateRequired(info.versionName, app.version)
         };
       }));
 

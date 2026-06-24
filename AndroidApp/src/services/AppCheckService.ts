@@ -24,6 +24,37 @@ export const getFallbackPackageName = (appName: string): string => {
     return `com.zeeshan.${name}`;
 };
 
+export const isUpdateRequired = (installedVersion: string | undefined, storeVersion: string): boolean => {
+    if (!installedVersion) return false;
+    
+    const cleanInstalled = installedVersion.trim().toLowerCase().replace(/^v/, '');
+    const cleanStore = storeVersion.trim().toLowerCase().replace(/^v/, '');
+    
+    if (cleanInstalled === cleanStore) return false;
+    
+    const cleanStr = (str: string) => str.replace(/[^0-9.]/g, '');
+    const instClean = cleanStr(cleanInstalled);
+    const storeClean = cleanStr(cleanStore);
+    
+    if (!instClean || !storeClean) {
+        return cleanStore > cleanInstalled;
+    }
+    
+    const instSegs = instClean.split('.').map(x => parseInt(x, 10) || 0);
+    const storeSegs = storeClean.split('.').map(x => parseInt(x, 10) || 0);
+    
+    const maxLen = Math.max(instSegs.length, storeSegs.length);
+    for (let i = 0; i < maxLen; i++) {
+        const instVal = instSegs[i] || 0;
+        const storeVal = storeSegs[i] || 0;
+        
+        if (storeVal > instVal) return true;
+        if (instVal > storeVal) return false;
+    }
+    
+    return false;
+};
+
 export class AppCheckService {
     /**
      * Check if a specific package is installed.

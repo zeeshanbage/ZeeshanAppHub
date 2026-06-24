@@ -14,7 +14,7 @@ import {
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppModel, incrementDownloadCount } from '../config/supabase';
 import { DownloadInstallService } from '../services/DownloadInstallService';
-import { AppCheckService, getFallbackPackageName } from '../services/AppCheckService';
+import { AppCheckService, getFallbackPackageName, isUpdateRequired } from '../services/AppCheckService';
 
 interface AppDetailsPopupProps {
     app: AppModel | null;
@@ -122,7 +122,7 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
 
     const handleAction = async () => {
         const pkgName = app.package_name || getFallbackPackageName(app.name);
-        if (installedInfo.isInstalled && installedInfo.versionName === app.version) {
+        if (installedInfo.isInstalled && !isUpdateRequired(installedInfo.versionName, app.version)) {
             await AppCheckService.launchApp(pkgName);
             return;
         }
@@ -245,6 +245,21 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                             </View>
                         </View>
 
+                        {/* Version Info Card if Installed */}
+                        {installedInfo.isInstalled && (
+                            <View style={styles.versionInfoCard}>
+                                <View style={styles.versionInfoRow}>
+                                    <Text style={styles.versionInfoLabel}>Installed Version</Text>
+                                    <Text style={styles.versionInfoVal}>v{installedInfo.versionName}</Text>
+                                </View>
+                                <View style={styles.versionInfoDivider} />
+                                <View style={styles.versionInfoRow}>
+                                    <Text style={styles.versionInfoLabel}>Store Version</Text>
+                                    <Text style={styles.versionInfoVal}>v{app.version}</Text>
+                                </View>
+                            </View>
+                        )}
+
                         {/* About */}
                         <View style={styles.section}>
                             <Text style={styles.sectionTitle}>About this app</Text>
@@ -274,7 +289,7 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                                 <TouchableOpacity
                                     style={[
                                         styles.actionBtn,
-                                        ((installedInfo.isInstalled && installedInfo.versionName === app.version) || (!installedInfo.isInstalled && isDownloaded)) && styles.actionBtnGreen,
+                                        ((installedInfo.isInstalled && !isUpdateRequired(installedInfo.versionName, app.version)) || (!installedInfo.isInstalled && isDownloaded)) && styles.actionBtnGreen,
                                         { flex: 1 }
                                     ]}
                                     activeOpacity={0.85}
@@ -283,7 +298,7 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                                     <Icon
                                         name={
                                             installedInfo.isInstalled
-                                                ? (installedInfo.versionName === app.version ? 'open-in-new' : 'arrow-up-bold-circle')
+                                                ? (!isUpdateRequired(installedInfo.versionName, app.version) ? 'open-in-new' : 'arrow-up-bold-circle')
                                                 : (isDownloaded ? 'check-decagram' : 'download')
                                         }
                                         size={22}
@@ -292,7 +307,7 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                                     />
                                     <Text style={styles.actionBtnText}>
                                         {installedInfo.isInstalled
-                                            ? (installedInfo.versionName === app.version ? 'Open' : 'Update')
+                                            ? (!isUpdateRequired(installedInfo.versionName, app.version) ? 'Open' : 'Update')
                                             : (isDownloaded ? 'Install' : 'Download & Install')}
                                     </Text>
                                 </TouchableOpacity>
@@ -551,5 +566,34 @@ const styles = StyleSheet.create({
         height: '100%',
         backgroundColor: '#7C3AED',
         borderRadius: 3,
+    },
+    versionInfoCard: {
+        backgroundColor: 'rgba(255, 255, 255, 0.025)',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 22,
+        borderWidth: 1,
+        borderColor: 'rgba(255, 255, 255, 0.04)',
+    },
+    versionInfoRow: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingVertical: 4,
+    },
+    versionInfoLabel: {
+        fontSize: 13,
+        color: '#64748B',
+        fontWeight: '500',
+    },
+    versionInfoVal: {
+        fontSize: 13,
+        color: '#E2E8F0',
+        fontWeight: '700',
+    },
+    versionInfoDivider: {
+        height: 1,
+        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        marginVertical: 10,
     },
 });

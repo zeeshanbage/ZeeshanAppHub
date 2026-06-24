@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppModel } from '../config/supabase';
-import { AppCheckService, getFallbackPackageName } from '../services/AppCheckService';
+import { AppCheckService, getFallbackPackageName, isUpdateRequired } from '../services/AppCheckService';
 
 interface AppCardProps {
     app: AppModel;
@@ -19,7 +19,7 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
         const checkStatus = async () => {
             const info = await AppCheckService.getAppInfo(pkgName);
             if (info.isInstalled) {
-                if (info.versionName !== app.version) {
+                if (isUpdateRequired(info.versionName, app.version)) {
                     setBtnText('UPDATE');
                 } else {
                     setBtnText('OPEN');
