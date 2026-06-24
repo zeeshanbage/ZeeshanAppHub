@@ -126,6 +126,17 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
         }
     };
 
+    const handleDelete = async () => {
+        const fileName = `${app.name.replace(/\s+/g, '_')}_v${app.version}.apk`;
+        try {
+            await DownloadInstallService.deleteDownloadedApk(fileName);
+            setIsDownloaded(false);
+            setProgress(0);
+        } catch (e) {
+            console.error('Failed to delete APK:', e);
+        }
+    };
+
     const progressPercent = Math.round(progress * 100);
 
     return (
@@ -246,21 +257,33 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
                                 </View>
                             </View>
                         ) : (
-                            <TouchableOpacity
-                                style={[styles.actionBtn, isDownloaded && styles.actionBtnGreen]}
-                                activeOpacity={0.85}
-                                onPress={handleAction}
-                            >
-                                <Icon
-                                    name={isDownloaded ? 'check-decagram' : 'download'}
-                                    size={22}
-                                    color="#FFFFFF"
-                                    style={{ marginRight: 10 }}
-                                />
-                                <Text style={styles.actionBtnText}>
-                                    {isDownloaded ? 'Install Application' : 'Download & Install'}
-                                </Text>
-                            </TouchableOpacity>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity
+                                    style={[styles.actionBtn, isDownloaded && styles.actionBtnGreen, { flex: 1 }]}
+                                    activeOpacity={0.85}
+                                    onPress={handleAction}
+                                >
+                                    <Icon
+                                        name={isDownloaded ? 'check-decagram' : 'download'}
+                                        size={22}
+                                        color="#FFFFFF"
+                                        style={{ marginRight: 10 }}
+                                    />
+                                    <Text style={styles.actionBtnText}>
+                                        {isDownloaded ? 'Install' : 'Download & Install'}
+                                    </Text>
+                                </TouchableOpacity>
+
+                                {isDownloaded && (
+                                    <TouchableOpacity
+                                        style={styles.deleteBtn}
+                                        activeOpacity={0.7}
+                                        onPress={handleDelete}
+                                    >
+                                        <Icon name="delete-outline" size={22} color="#EF4444" />
+                                    </TouchableOpacity>
+                                )}
+                            </View>
                         )}
                     </View>
                 </Animated.View>
@@ -460,6 +483,16 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '800',
         letterSpacing: 0.5,
+    },
+    deleteBtn: {
+        width: 54,
+        height: 54,
+        borderRadius: 16,
+        backgroundColor: 'rgba(239, 68, 68, 0.08)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.25)',
     },
     progressCard: {
         backgroundColor: 'rgba(167, 139, 250, 0.06)',

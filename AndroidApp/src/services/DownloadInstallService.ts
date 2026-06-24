@@ -124,7 +124,32 @@ export class DownloadInstallService {
             console.error('Download/Install error:', error);
             ToastAndroid.show(`Failed to download: ${error.message}`, ToastAndroid.LONG);
             this.clearTracking(fileName);
+            // Clean up partial download so it does not leave a corrupted APK file
+            try {
+                const fileInfo = await FileSystem.getInfoAsync(filePath);
+                if (fileInfo.exists) {
+                    await FileSystem.deleteAsync(filePath, { idempotent: true });
+                }
+            } catch (cleanupError) {
+                console.error('Failed to clean up partial file:', cleanupError);
+            }
             throw error;
+        }
+    }
+
+    /**
+     * Delete the downloaded APK from local cache.
+     */
+    static async deleteDownloadedApk(fileName: string): Promise<void> {
+        try {
+            const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+            const fileInfo = await FileSystem.getInfoAsync(filePath);
+            if (fileInfo.exists) {
+                console.log('Deleting cached APK:', filePath);
+                await FileSystem.deleteAsync(filePath, { idempotent: true });
+            }
+        } catch (error) {
+            console.error('Failed to delete cached APK:', error);
         }
     }
 

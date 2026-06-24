@@ -32,10 +32,6 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
                         <View style={styles.versionPill}>
                             <Text style={styles.versionText}>v{app.version}</Text>
                         </View>
-                        <View style={styles.sizePill}>
-                            <Icon name="android" size={11} color="#A78BFA" />
-                            <Text style={styles.sizeText}>APK</Text>
-                        </View>
                         {app.tag === 'NEW' && (
                             <View style={styles.newTag}>
                                 <View style={styles.pulseDot} />
