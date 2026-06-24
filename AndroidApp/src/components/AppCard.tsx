@@ -36,6 +36,18 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
                             <Icon name="android" size={11} color="#A78BFA" />
                             <Text style={styles.sizeText}>APK</Text>
                         </View>
+                        {app.tag === 'NEW' && (
+                            <View style={styles.newTag}>
+                                <View style={styles.pulseDot} />
+                                <Text style={styles.newTagText}>NEW</Text>
+                            </View>
+                        )}
+                        {app.tag === 'MOST DOWNLOADED' && (
+                            <View style={styles.popularTag}>
+                                <Icon name="fire" size={11} color="#FBBF24" />
+                                <Text style={styles.popularTagText}>POPULAR</Text>
+                            </View>
+                        )}
                     </View>
                 </View>
 
@@ -144,6 +156,46 @@ const styles = StyleSheet.create({
         fontSize: 11,
         fontWeight: '600',
         color: '#A78BFA',
+    },
+    newTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(16, 185, 129, 0.12)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        gap: 4,
+        borderWidth: 1,
+        borderColor: 'rgba(16, 185, 129, 0.25)',
+    },
+    newTagText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#10B981',
+        letterSpacing: 0.3,
+    },
+    pulseDot: {
+        width: 5,
+        height: 5,
+        borderRadius: 2.5,
+        backgroundColor: '#10B981',
+    },
+    popularTag: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(245, 158, 11, 0.12)',
+        paddingHorizontal: 8,
+        paddingVertical: 3,
+        borderRadius: 6,
+        gap: 3,
+        borderWidth: 1,
+        borderColor: 'rgba(245, 158, 11, 0.25)',
+    },
+    popularTagText: {
+        fontSize: 11,
+        fontWeight: '700',
+        color: '#F59E0B',
+        letterSpacing: 0.3,
     },
     getBtn: {
         backgroundColor: '#7C3AED',

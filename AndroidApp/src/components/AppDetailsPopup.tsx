@@ -12,7 +12,7 @@ import {
     BackHandler,
 } from 'react-native';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
-import { AppModel } from '../config/supabase';
+import { AppModel, incrementDownloadCount } from '../config/supabase';
 import { DownloadInstallService } from '../services/DownloadInstallService';
 
 interface AppDetailsPopupProps {
@@ -120,6 +120,8 @@ export const AppDetailsPopup: React.FC<AppDetailsPopupProps> = ({ app, visible, 
         } else {
             setDownloading(true);
             setProgress(0);
+            // Track download increment telemetry
+            incrementDownloadCount(app.id, app.download_count || 0);
             await DownloadInstallService.downloadAndInstall(app.apk_url, fileName);
         }
     };
@@ -273,7 +275,11 @@ const styles = StyleSheet.create({
         justifyContent: 'flex-end',
     },
     backdrop: {
-        ...StyleSheet.absoluteFillObject,
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         backgroundColor: 'rgba(5, 8, 20, 0.88)',
     },
     card: {

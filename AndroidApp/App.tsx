@@ -139,9 +139,40 @@ function App(): React.JSX.Element {
   const loadApps = async () => {
     console.log('loadApps: Fetching apps...');
     try {
-      const data = await fetchApps();
-      console.log('loadApps: Successfully loaded apps. Count:', data.length);
-      setApps(data);
+      const rawData = await fetchApps();
+      console.log('loadApps: Successfully loaded apps. Count:', rawData.length);
+      
+      // Compute "MOST DOWNLOADED" threshold
+      let maxDownloads = 0;
+      rawData.forEach(app => {
+        const count = app.download_count || 0;
+        if (count > maxDownloads) {
+          maxDownloads = count;
+        }
+      });
+
+      const nowTime = Date.now();
+      const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
+
+      const processedData = rawData.map(app => {
+        let tag: 'NEW' | 'MOST DOWNLOADED' | null = null;
+        
+        // 1. Tag as "MOST DOWNLOADED" if it has the maximum download count (and count > 0)
+        if (app.download_count && app.download_count === maxDownloads && maxDownloads > 0) {
+          tag = 'MOST DOWNLOADED';
+        }
+        // 2. Tag as "NEW" if it was uploaded within the last 7 days
+        else if (app.created_at) {
+          const createdTime = new Date(app.created_at).getTime();
+          if ((nowTime - createdTime) < sevenDaysMs) {
+            tag = 'NEW';
+          }
+        }
+
+        return { ...app, tag };
+      });
+
+      setApps(processedData);
     } catch (error) {
       console.error('loadApps error:', error);
     } finally {
@@ -309,7 +340,11 @@ const styles = StyleSheet.create({
   },
   // Multi-layer background
   bgBase: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#080B16',
   },
   bgOrb1: {
