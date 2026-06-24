@@ -6,3 +6,5 @@ AndroidApp/android/.gradle/
 *.aab
 .env
 .env.*
+.vercel
+.env*

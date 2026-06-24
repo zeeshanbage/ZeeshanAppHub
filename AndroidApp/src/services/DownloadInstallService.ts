@@ -1,5 +1,5 @@
-import RNFS from 'react-native-fs';
-import FileViewer from 'react-native-file-viewer';
+import * as FileSystem from 'expo-file-system/legacy';
+import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform, ToastAndroid } from 'react-native';
 
 type DownloadProgressCallback = (progress: number) => void;
@@ -55,15 +55,16 @@ export class DownloadInstallService {
      * Checks if the APK file already exists perfectly on the disk.
      */
     static async isApkDownloaded(fileName: string): Promise<boolean> {
-        const filePath = `${RNFS.ExternalCachesDirectoryPath}/${fileName}`;
-        return await RNFS.exists(filePath);
+        const filePath = `${FileSystem.cacheDirectory}${fileName}`;
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        return fileInfo.exists;
     }
 
     /**
      * Install an APK that has already been verified to exist on disk.
      */
     static async installExistingApk(fileName: string): Promise<void> {
-        const filePath = `${RNFS.ExternalCachesDirectoryPath}/${fileName}`;
+        const filePath = `${FileSystem.cacheDirectory}${fileName}`;
         await this.installApk(filePath);
     }
 
@@ -77,12 +78,13 @@ export class DownloadInstallService {
     ): Promise<void> {
         if (Platform.OS !== 'android') return;
 
-        const downloadDest = `${RNFS.ExternalCachesDirectoryPath}/${fileName}`;
+        const filePath = `${FileSystem.cacheDirectory}${fileName}`;
 
         // 1. Check if it's already downloaded completely
-        if (await RNFS.exists(downloadDest) && !this.activeProgress.has(fileName)) {
+        const fileInfo = await FileSystem.getInfoAsync(filePath);
+        if (fileInfo.exists && !this.activeProgress.has(fileName)) {
             console.log('File already exists, jumping direct to install.');
-            await this.installApk(downloadDest);
+            await this.installApk(filePath);
             return;
         }
 
@@ -92,31 +94,31 @@ export class DownloadInstallService {
             return;
         }
 
-        console.log(`Downloading ${url} to ${downloadDest}`);
+        console.log(`Downloading ${url} to ${filePath}`);
         this.updateProgress(fileName, 0);
 
         try {
-            const result = RNFS.downloadFile({
-                fromUrl: url,
-                toFile: downloadDest,
-                progress: (res) => {
-                    if (res.contentLength > 0) {
-                        const progress = res.bytesWritten / res.contentLength;
+            const downloadResumable = FileSystem.createDownloadResumable(
+                url,
+                filePath,
+                {},
+                (downloadProgress) => {
+                    if (downloadProgress.totalBytesExpectedToWrite > 0) {
+                        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
                         this.updateProgress(fileName, progress);
                     }
-                },
-                progressDivider: 2,
-            });
+                }
+            );
 
-            const response = await result.promise;
+            const response = await downloadResumable.downloadAsync();
 
-            if (response.statusCode === 200) {
+            if (response && response.status === 200) {
                 console.log('Download complete. Triggering install intent...');
                 this.updateProgress(fileName, 1);
                 this.clearTracking(fileName);
-                await this.installApk(downloadDest);
+                await this.installApk(filePath);
             } else {
-                throw new Error(`Download failed with status: ${response.statusCode}`);
+                throw new Error(`Download failed with status: ${response ? response.status : 'unknown'}`);
             }
         } catch (error: any) {
             console.error('Download/Install error:', error);
@@ -128,9 +130,14 @@ export class DownloadInstallService {
 
     private static async installApk(filePath: string): Promise<void> {
         try {
-            console.log('Opening file with FileViewer:', filePath);
-            // FileViewer implicitly resolves "content://" correctly for Android 7.0+
-            await FileViewer.open(filePath, { showOpenWithDialog: false });
+            console.log('Opening file with IntentLauncher:', filePath);
+            const contentUri = await FileSystem.getContentUriAsync(filePath);
+            
+            await IntentLauncher.startActivityAsync('android.intent.action.VIEW', {
+                data: contentUri,
+                type: 'application/vnd.android.package-archive',
+                flags: 1, // Intent.FLAG_GRANT_READ_URI_PERMISSION
+            });
         } catch (error: any) {
             console.error('Install intent failed:', error);
             ToastAndroid.show('Failed to launch installer.', ToastAndroid.LONG);

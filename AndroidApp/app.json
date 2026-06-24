@@ -1,4 +1,24 @@
 {
-  "name": "AndroidApp",
-  "displayName": "AndroidApp"
+  "expo": {
+    "name": "AndroidApp",
+    "slug": "AndroidApp",
+    "version": "0.0.1",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.zeeshan.apphub",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.REQUEST_INSTALL_PACKAGES"
+      ]
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-firebase/messaging",
+      "expo-font"
+    ]
+  }
 }

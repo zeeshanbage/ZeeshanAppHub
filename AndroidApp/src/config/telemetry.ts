@@ -1,12 +1,23 @@
-import DeviceInfo from 'react-native-device-info';
+import * as Device from 'expo-device';
+import * as Application from 'expo-application';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
+
+const getUniqueId = async (): Promise<string> => {
+    if (Platform.OS === 'android') {
+        return Application.getAndroidId() || 'unknown-android-id';
+    } else {
+        const iosId = await Application.getIosIdForVendorAsync();
+        return iosId || 'unknown-ios-id';
+    }
+};
 
 export const trackInstall = async () => {
     try {
-        const uniqueId = await DeviceInfo.getUniqueId();
-        const brand = await DeviceInfo.getBrand();
-        const model = await DeviceInfo.getModel();
-        const systemVersion = await DeviceInfo.getSystemVersion();
+        const uniqueId = await getUniqueId();
+        const brand = Device.brand || 'unknown-brand';
+        const model = Device.modelName || 'unknown-model';
+        const systemVersion = Device.osVersion || 'unknown-version';
 
         // Perform an UPSERT to update 'last_opened' without duplicating the device entry for 'installed_at'
         const { error } = await supabase.from('installs').upsert(
@@ -32,8 +43,8 @@ export const trackInstall = async () => {
 
 export const logFatalCrash = async (errorString: string, isFatal: boolean) => {
     try {
-        const uniqueId = await DeviceInfo.getUniqueId();
-        const systemName = await DeviceInfo.getSystemName();
+        const uniqueId = await getUniqueId();
+        const systemName = Device.osName || Platform.OS;
 
         const { error } = await supabase.from('error_logs').insert({
             device_id: uniqueId,

@@ -11,7 +11,7 @@ import {
     ScrollView,
     BackHandler,
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppModel } from '../config/supabase';
 import { DownloadInstallService } from '../services/DownloadInstallService';
 

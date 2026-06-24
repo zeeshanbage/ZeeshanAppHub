@@ -21,18 +21,20 @@ LogBox.ignoreLogs([
 import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
 import { AppDetailsPopup } from './src/components/AppDetailsPopup';
-import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
+import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import messaging from '@react-native-firebase/messaging';
 import { PermissionsAndroid, Platform } from 'react-native';
-import { setJSExceptionHandler, setNativeExceptionHandler } from 'react-native-exception-handler';
 import { trackInstall, logFatalCrash } from './src/config/telemetry';
 
 // Handle JS Crashes
-setJSExceptionHandler((error, isFatal) => {
-  if (isFatal) {
-    const errorString = `${error.name}: ${error.message}\n${error.stack}`;
-    logFatalCrash(errorString, isFatal);
+const globalErrorHandler = (error: any, isFatal?: boolean) => {
+  const errorString = error instanceof Error 
+    ? `${error.name}: ${error.message}\n${error.stack}` 
+    : String(error);
     
+  logFatalCrash(errorString, isFatal ?? true);
+  
+  if (isFatal) {
     Alert.alert(
       'Unexpected Error',
       'The App Hub encountered a critical error. Your crash log has been securely tracked, but you can also share it manually with the developer.',
@@ -49,12 +51,18 @@ setJSExceptionHandler((error, isFatal) => {
       ]
     );
   }
-}, true);
+};
 
-// Handle Native Crashes
-setNativeExceptionHandler((errorString) => {
-  logFatalCrash(errorString, true);
-});
+const globalAny = globalThis as any;
+if (globalAny.ErrorUtils) {
+  const previousHandler = globalAny.ErrorUtils.getGlobalHandler();
+  globalAny.ErrorUtils.setGlobalHandler((error: any, isFatal?: boolean) => {
+    globalErrorHandler(error, isFatal);
+    if (previousHandler) {
+      previousHandler(error, isFatal);
+    }
+  });
+}
 
 const { width, height } = Dimensions.get('window');
 
@@ -126,13 +134,18 @@ function App(): React.JSX.Element {
   const [selectedApp, setSelectedApp] = useState<AppModel | null>(null);
   const [popupVisible, setPopupVisible] = useState(false);
 
+  console.log('App component mounting. Current window dimensions:', Dimensions.get('window'));
+
   const loadApps = async () => {
+    console.log('loadApps: Fetching apps...');
     try {
       const data = await fetchApps();
+      console.log('loadApps: Successfully loaded apps. Count:', data.length);
       setApps(data);
     } catch (error) {
-      console.error(error);
+      console.error('loadApps error:', error);
     } finally {
+      console.log('loadApps: Setting loading to false');
       setLoading(false);
       setRefreshing(false);
     }
@@ -235,6 +248,8 @@ function App(): React.JSX.Element {
       </View>
     </View>
   );
+
+  console.log('App rendering. state:', { loading, refreshing, appsCount: apps.length });
 
   return (
     <View style={styles.container}>
