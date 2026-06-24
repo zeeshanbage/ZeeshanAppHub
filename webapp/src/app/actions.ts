@@ -84,10 +84,12 @@ export async function uploadAppAction(formData: FormData) {
         await fs.writeFile(tempApkPath, Buffer.from(apkBuffer));
 
         let iconBuffer: Buffer;
+        let packageName = "";
         try {
             const parser = new AppInfoParser(tempApkPath);
             const result = await parser.parse();
             iconBuffer = Buffer.from(result.icon.replace(/^data:image\/\w+;base64,/, ""), 'base64');
+            packageName = result.package;
         } catch (e: any) {
             console.error("Failed to parse APK:", e);
             throw new Error("Failed to extract icon from APK. Ensure it is a valid Android package.");
@@ -144,6 +146,7 @@ export async function uploadAppAction(formData: FormData) {
             description,
             icon_url: iconSigned.signedUrl,
             apk_url: r2DownloadUrl,
+            package_name: packageName,
         };
 
         const { error: dbError } = await supabaseAdmin
