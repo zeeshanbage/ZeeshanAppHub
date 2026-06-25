@@ -34,7 +34,7 @@ jobs:
 
       - name: Install Dependencies
         working-directory: ./AndroidApp
-        run: npm ci
+        run: npm install
 
       - name: Create .env file from Secrets
         working-directory: ./AndroidApp
