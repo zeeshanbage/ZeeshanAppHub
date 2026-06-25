@@ -27,7 +27,7 @@ if (!fs.existsSync(packageJsonPath)) {
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
 const version = packageJson.version;
 const appName = "Zeeshan's App Hub";
-const packageName = "com.zeeshan.apphub";
+const packageName = "com.androidapp";
 
 console.log(`Publishing Hub update for ${appName} (${packageName}), version ${version}...`);
 

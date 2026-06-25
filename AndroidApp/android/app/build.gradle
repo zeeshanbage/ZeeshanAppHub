@@ -89,7 +89,7 @@ android {
 
     namespace 'com.zeeshan.apphub'
     defaultConfig {
-        applicationId 'com.zeeshan.apphub'
+        applicationId 'com.androidapp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
