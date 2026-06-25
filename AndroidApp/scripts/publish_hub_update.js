@@ -68,21 +68,29 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 async function run() {
     const r2Key = `apks/ZeeshanHub_v${version.replace(/\./g, '')}.apk`;
-    const apkDownloadUrl = `${r2PublicUrl.replace(/\/$/, '')}/${r2Key}`;
+    let apkDownloadUrl = '';
 
     try {
-        // 5. Upload APK to Cloudflare R2
-        console.log(`Uploading APK to R2: ${r2Key}...`);
-        const fileStream = fs.createReadStream(apkPath);
-        await s3Client.send(
-            new PutObjectCommand({
-                Bucket: r2BucketName,
-                Key: r2Key,
-                Body: fileStream,
-                ContentType: 'application/vnd.android.package-archive',
-            })
-        );
-        console.log(`Successfully uploaded APK to R2: ${apkDownloadUrl}`);
+        try {
+            // 5. Upload APK to Cloudflare R2
+            console.log(`Uploading APK to R2: ${r2Key}...`);
+            const fileStream = fs.createReadStream(apkPath);
+            await s3Client.send(
+                new PutObjectCommand({
+                    Bucket: r2BucketName,
+                    Key: r2Key,
+                    Body: fileStream,
+                    ContentType: 'application/vnd.android.package-archive',
+                })
+            );
+            apkDownloadUrl = `${r2PublicUrl.replace(/\/$/, '')}/${r2Key}`;
+            console.log(`Successfully uploaded APK to R2: ${apkDownloadUrl}`);
+        } catch (r2Error) {
+            console.warn(`Warning: R2 upload failed (${r2Error.message}). Falling back to GitHub Release URL...`);
+            const tagName = process.env.TAG_NAME || `build-${process.env.GITHUB_RUN_NUMBER || '28'}`;
+            apkDownloadUrl = `https://github.com/zeeshanbage/ZeeshanAppHub/releases/download/${tagName}/app-release.apk`;
+            console.log(`Fallback APK URL: ${apkDownloadUrl}`);
+        }
 
         // 6. Upload app icon to Supabase Storage dynamically from built assets
         const localIconPath = path.join(__dirname, '../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png');
