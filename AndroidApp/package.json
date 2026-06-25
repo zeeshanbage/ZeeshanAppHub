@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "android": "expo run:android",
-    "mumu": "adb connect 127.0.0.1:16384 & adb connect 127.0.0.1:7555 & expo run:android",
+    "mumu": "set ADB_LOCAL_TRANSPORT_MAX_PORT=5553&& adb kill-server&& adb start-server&& adb connect 127.0.0.1:16384&& adb connect 127.0.0.1:7555&& expo run:android",
     "ios": "expo run:ios",
     "lint": "eslint .",
     "start": "expo start",

@@ -26,7 +26,7 @@ if (!fs.existsSync(packageJsonPath)) {
 }
 const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf-8'));
 const version = packageJson.version;
-const appName = "Zeeshan Hub";
+const appName = "Zeeshan's App Hub";
 const packageName = "com.zeeshan.apphub";
 
 console.log(`Publishing Hub update for ${appName} (${packageName}), version ${version}...`);
@@ -78,7 +78,40 @@ async function run() {
         );
         console.log(`Successfully uploaded APK to R2: ${apkDownloadUrl}`);
 
-        // 6. Check if app already exists in Supabase
+        // 6. Upload app icon to Supabase Storage dynamically from built assets
+        const localIconPath = path.join(__dirname, '../android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png');
+        let iconUrl = "https://cdn-icons-png.flaticon.com/512/5186/5186259.png"; // fallback
+        
+        if (fs.existsSync(localIconPath)) {
+            try {
+                console.log(`Uploading app icon to Supabase Storage...`);
+                const iconBuffer = fs.readFileSync(localIconPath);
+                const iconFileName = `zeeshanhub_icon_${Date.now()}.png`;
+                
+                const { error: iconUploadError } = await supabase.storage
+                    .from('icons')
+                    .upload(iconFileName, iconBuffer, { upsert: false, contentType: 'image/png' });
+                    
+                if (iconUploadError) {
+                    throw new Error(iconUploadError.message);
+                }
+                
+                const { data: signedData, error: signError } = await supabase.storage
+                    .from('icons')
+                    .createSignedUrl(iconFileName, 60 * 60 * 24 * 365 * 100); // 100 years
+                    
+                if (signError || !signedData) {
+                    throw new Error(signError?.message || 'Failed to sign url');
+                }
+                
+                iconUrl = signedData.signedUrl;
+                console.log(`Icon successfully uploaded: ${iconUrl}`);
+            } catch (iconErr) {
+                console.warn(`Warning: Failed to upload custom app icon, using fallback:`, iconErr.message);
+            }
+        }
+
+        // 7. Check if app already exists in Supabase
         console.log(`Querying DB for app with package_name: ${packageName}...`);
         const { data: existingApp, error: fetchError } = await supabase
             .from('apps')
@@ -95,18 +128,18 @@ async function run() {
             version: version,
             apk_url: apkDownloadUrl,
             description: "Zeeshan App Hub Client Application. Download updates directly from the hub!",
-            icon_url: "https://cdn-icons-png.flaticon.com/512/5186/5186259.png", 
+            icon_url: iconUrl, 
         };
 
         if (existingApp) {
             console.log(`App exists in DB (ID: ${existingApp.id}). Updating version to ${version}...`);
-            appData.icon_url = existingApp.icon_url;
 
             const { error: updateError } = await supabase
                 .from('apps')
                 .update({
                     version: version,
                     apk_url: apkDownloadUrl,
+                    icon_url: appData.icon_url,
                     description: appData.description,
                 })
                 .eq('id', existingApp.id);
