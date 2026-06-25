@@ -1,4 +1,5 @@
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+// Trigger workflow run after updating lockfile and commands
 const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
