@@ -4,15 +4,20 @@ const { createClient } = require('@supabase/supabase-js');
 const fs = require('fs');
 const path = require('path');
 
-// 1. Read environment variables from GitHub Secrets
-const r2AccessKeyId = process.env.CLOUDFLARE_R2_ACCESS_KEY_ID;
-const r2SecretAccessKey = process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY;
-const r2AccountId = process.env.CLOUDFLARE_R2_ACCOUNT_ID;
-const r2BucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME;
-const r2PublicUrl = process.env.CLOUDFLARE_R2_PUBLIC_URL;
+// 1. Read environment variables from GitHub Secrets and strip any quotes
+function cleanEnv(val) {
+    if (!val) return val;
+    return val.trim().replace(/^["'](.*)["']$/, '$1');
+}
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const r2AccessKeyId = cleanEnv(process.env.CLOUDFLARE_R2_ACCESS_KEY_ID);
+const r2SecretAccessKey = cleanEnv(process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY);
+const r2AccountId = cleanEnv(process.env.CLOUDFLARE_R2_ACCOUNT_ID);
+const r2BucketName = cleanEnv(process.env.CLOUDFLARE_R2_BUCKET_NAME);
+const r2PublicUrl = cleanEnv(process.env.CLOUDFLARE_R2_PUBLIC_URL);
+
+const supabaseUrl = cleanEnv(process.env.NEXT_PUBLIC_SUPABASE_URL);
+const supabaseServiceKey = cleanEnv(process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 if (!r2AccessKeyId || !r2SecretAccessKey || !r2AccountId || !r2BucketName || !r2PublicUrl || !supabaseUrl || !supabaseServiceKey) {
     console.error('Error: Missing required environment variables.');

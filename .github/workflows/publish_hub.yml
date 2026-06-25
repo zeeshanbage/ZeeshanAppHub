@@ -1,0 +1,49 @@
+name: Publish Hub Update Manual
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: 'GitHub Release Tag to publish (e.g. build-28)'
+        required: true
+        default: 'build-28'
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: ./AndroidApp/package-lock.json
+
+      - name: Install Dependencies
+        working-directory: ./AndroidApp
+        run: npm install
+
+      - name: Download APK from GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p AndroidApp/android/app/build/outputs/apk/release
+          gh release download ${{ github.event.inputs.tag_name }} --repo ${{ github.repository }} --pattern "*.apk" --dir AndroidApp/android/app/build/outputs/apk/release
+
+      - name: Publish Hub Update
+        working-directory: ./AndroidApp
+        run: node scripts/publish_hub_update.js
+        env:
+          CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY }}
+          CLOUDFLARE_R2_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID }}
+          CLOUDFLARE_R2_BUCKET_NAME: ${{ secrets.CLOUDFLARE_R2_BUCKET_NAME }}
+          CLOUDFLARE_R2_PUBLIC_URL: ${{ secrets.CLOUDFLARE_R2_PUBLIC_URL }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
