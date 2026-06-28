@@ -12,6 +12,9 @@ export default function AdminUploadForm() {
         notificationBody: "",
     });
     const [apkFile, setApkFile] = useState<File | null>(null);
+    const [packageName, setPackageName] = useState("");
+    const [iconBase64, setIconBase64] = useState("");
+    const [isParsing, setIsParsing] = useState(false);
 
     const [isUploading, setIsUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
@@ -24,9 +27,41 @@ export default function AdminUploadForm() {
         setFormData((prev) => ({ ...prev, [name]: value }));
     };
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: "apk") => {
+    const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: "apk") => {
         if (e.target.files && e.target.files.length > 0) {
-            if (type === "apk") setApkFile(e.target.files[0]);
+            const file = e.target.files[0];
+            if (type === "apk") {
+                setApkFile(file);
+                setIsParsing(true);
+                setErrorMessage("");
+                setStatus("idle");
+                try {
+                    const AppInfoParser = (await import("app-info-parser/dist/app-info-parser.js")).default;
+                    const parser = new AppInfoParser(file);
+                    const result = await parser.parse();
+
+                    let label = "";
+                    if (result.application && result.application.label) {
+                        label = Array.isArray(result.application.label)
+                            ? result.application.label[0]
+                            : result.application.label;
+                    }
+
+                    setFormData((prev) => ({
+                        ...prev,
+                        name: label || result.package || prev.name,
+                        version: result.versionName || prev.version,
+                    }));
+                    setPackageName(result.package || "");
+                    setIconBase64(result.icon || "");
+                } catch (err: any) {
+                    console.error("Client-side APK parsing error:", err);
+                    setErrorMessage("Failed to parse APK file. You can still fill details manually.");
+                    setStatus("error");
+                } finally {
+                    setIsParsing(false);
+                }
+            }
         }
     };
 
@@ -53,6 +88,11 @@ export default function AdminUploadForm() {
             if (formData.notificationTitle) body.append("notificationTitle", formData.notificationTitle);
             if (formData.notificationBody) body.append("notificationBody", formData.notificationBody);
             body.append("apk", apkFile);
+            body.append("package_name", packageName);
+            if (iconBase64) {
+                const base64Data = iconBase64.replace(/^data:image\/\w+;base64,/, "");
+                body.append("iconBase64", base64Data);
+            }
 
             // Use XMLHttpRequest for upload progress tracking
             const result = await new Promise<{ success: boolean; error?: string }>((resolve, reject) => {
@@ -98,6 +138,8 @@ export default function AdminUploadForm() {
             setStatus("success");
             setFormData({ name: "", version: "", description: "", notificationTitle: "", notificationBody: "" });
             setApkFile(null);
+            setPackageName("");
+            setIconBase64("");
             const fileInputs = document.querySelectorAll('input[type="file"]') as NodeListOf<HTMLInputElement>;
             fileInputs.forEach(input => input.value = "");
 
@@ -112,7 +154,7 @@ export default function AdminUploadForm() {
 
     const getProgressLabel = () => {
         if (uploadPhase === "uploading") return `Uploading… ${uploadProgress}%`;
-        if (uploadPhase === "processing") return "Processing — extracting icon, uploading to R2…";
+        if (uploadPhase === "processing") return "Processing — saving to DB & sending notifications…";
         return "Complete!";
     };
 
@@ -184,7 +226,14 @@ export default function AdminUploadForm() {
                                 required
                             />
                             <div className="flex flex-col items-center justify-center space-y-2">
-                                {apkFile ? (
+                                {isParsing ? (
+                                    <>
+                                        <Loader2 className="w-8 h-8 text-blue-400 animate-spin mb-1" />
+                                        <span className="text-sm text-blue-300 font-medium">
+                                            Reading APK info...
+                                        </span>
+                                    </>
+                                ) : apkFile ? (
                                     <>
                                         <CheckCircle2 className="w-8 h-8 text-emerald-400 mb-1" />
                                         <span className="text-sm text-emerald-300 font-medium truncate max-w-full px-2">

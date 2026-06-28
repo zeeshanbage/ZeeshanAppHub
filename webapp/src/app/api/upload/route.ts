@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import AppInfoParser from "app-info-parser";
 import { createWriteStream, createReadStream } from "fs";
 import { unlink, stat } from "fs/promises";
 import * as os from "os";
@@ -78,7 +77,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const { name, version, description, notificationTitle, notificationBody } = formData;
+        const { name, version, description, notificationTitle, notificationBody, iconBase64, package_name } = formData;
         if (!name || !version || !description || !tempApkPath) {
             throw new Error("Missing required fields or APK file.");
         }
@@ -90,16 +89,14 @@ export async function POST(request: NextRequest) {
         const releaseTag = `${sanitize(name)}-v${sanitize(version)}`;
         const apkFileName = `${sanitize(name)}_v${sanitize(version)}.apk`;
 
-        // 1. Parse APK for icon and package name
+        // 1. Process icon and package name from client
         let iconBuffer: Buffer;
-        let packageName = "";
-        try {
-            const parser = new AppInfoParser(tempApkPath);
-            const result = await parser.parse();
-            iconBuffer = Buffer.from(result.icon.replace(/^data:image\/\w+;base64,/, ""), "base64");
-            packageName = result.package;
-        } catch {
-            throw new Error("Failed to extract icon or parse package name from APK.");
+        const packageName = package_name || "";
+        if (iconBase64) {
+            iconBuffer = Buffer.from(iconBase64, "base64");
+        } else {
+            // fallback empty png or transparent pixel if client didn't supply it
+            iconBuffer = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=", "base64");
         }
 
         const iconFileName = `${Date.now()}.png`;

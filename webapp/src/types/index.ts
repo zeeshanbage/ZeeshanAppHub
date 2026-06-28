@@ -6,4 +6,5 @@ export interface AppModel {
     apk_url: string;
     description: string;
     package_name?: string;
+    download_count?: number;
 }

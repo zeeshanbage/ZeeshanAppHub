@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import AppInfoParser from "app-info-parser";
 import { createWriteStream, createReadStream } from "fs";
 import { unlink, stat } from "fs/promises";
 import * as os from "os";
@@ -98,7 +97,7 @@ export async function POST(request: NextRequest) {
     }
 
     try {
-        const { appId, appName, newVersion, oldApkUrl, notificationTitle, notificationBody } = fields;
+        const { appId, appName, newVersion, oldApkUrl, notificationTitle, notificationBody, package_name } = fields;
         if (!appId || !appName || !newVersion || !tempApkPath) {
             throw new Error("Missing required fields (appId, appName, newVersion) or APK file.");
         }
@@ -192,15 +191,8 @@ export async function POST(request: NextRequest) {
         const newApkUrl = `${r2PublicUrl.replace(/\/$/, "")}/${r2Key}`;
         console.log(`Successfully uploaded new APK to R2! URL: ${newApkUrl}`);
 
-        // Parse package name from new APK
-        let packageName = "";
-        try {
-            const parser = new AppInfoParser(tempApkPath);
-            const result = await parser.parse();
-            packageName = result.package;
-        } catch (parseErr: any) {
-            console.warn("Failed to parse package name from update APK:", parseErr.message);
-        }
+        // Retrieve package name from client
+        const packageName = package_name || "";
 
         // 4. Update DB with new version, apk_url and package_name
         const updatePayload: any = { version: newVersion, apk_url: newApkUrl };

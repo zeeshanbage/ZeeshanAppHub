@@ -1,7 +1,6 @@
 "use server";
 
 import { createClient } from "@supabase/supabase-js";
-import AppInfoParser from 'app-info-parser';
 import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as path from 'path';

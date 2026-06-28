@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Pencil, Trash2, X, Check, Loader2, RefreshCw, AlertCircle, Package, ImagePlus, FileUp, Bell } from "lucide-react";
+import { Pencil, Trash2, X, Check, Loader2, RefreshCw, AlertCircle, Package, ImagePlus, FileUp, Bell, Download } from "lucide-react";
 import { fetchAppsAction, updateAppAction, deleteAppAction } from "@/app/actions";
 import { AppModel } from "@/types";
 
@@ -24,6 +24,7 @@ export default function AppList() {
     // APK update state
     const [apkFile, setApkFile] = useState<File | null>(null);
     const [updatingApk, setUpdatingApk] = useState<string | null>(null);
+    const [updatingPackageName, setUpdatingPackageName] = useState("");
     const [apkProgress, setApkProgress] = useState(0);
     const [apkPhase, setApkPhase] = useState<"idle" | "uploading" | "processing">("idle");
     const apkInputRef = useRef<HTMLInputElement>(null);
@@ -82,6 +83,7 @@ export default function AppList() {
         setIconFile(null);
         setIconPreview(null);
         setApkFile(null);
+        setUpdatingPackageName("");
         setApkPhase("idle");
     };
 
@@ -91,6 +93,7 @@ export default function AppList() {
         setIconFile(null);
         setIconPreview(null);
         setApkFile(null);
+        setUpdatingPackageName("");
         setApkPhase("idle");
     };
 
@@ -146,10 +149,21 @@ export default function AppList() {
     };
 
     // --- APK Update ---
-    const handleApkFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleApkFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             setApkFile(file);
+            try {
+                const AppInfoParser = (await import("app-info-parser/dist/app-info-parser.js")).default;
+                const parser = new AppInfoParser(file);
+                const result = await parser.parse();
+                setUpdatingPackageName(result.package || "");
+                if (result.versionName) {
+                    setEditForm(prev => ({ ...prev, version: result.versionName }));
+                }
+            } catch (err: any) {
+                console.warn("Client-side APK parsing error during update selection:", err);
+            }
         }
     };
 
@@ -169,6 +183,9 @@ export default function AppList() {
             if (editForm.notifTitle) body.append("notificationTitle", editForm.notifTitle);
             if (editForm.notifBody) body.append("notificationBody", editForm.notifBody);
             body.append("apk", apkFile);
+            if (updatingPackageName) {
+                body.append("package_name", updatingPackageName);
+            }
 
             const result = await new Promise<{ success: boolean; apk_url?: string; version?: string; error?: string }>((resolve, reject) => {
                 const xhr = new XMLHttpRequest();
@@ -211,6 +228,7 @@ export default function AppList() {
                     : a
             ));
             setApkFile(null);
+            setUpdatingPackageName("");
             setApkPhase("idle");
         } catch (err: any) {
             setError(err.message || "APK update failed");
@@ -495,8 +513,15 @@ export default function AppList() {
                                         {/* Info */}
                                         <div className="flex-1 min-w-0">
                                             <h3 className="text-white font-semibold text-sm sm:text-base truncate">{app.name}</h3>
-                                            <p className="text-slate-500 text-xs">v{app.version}</p>
-                                            <p className="text-slate-400 text-xs mt-0.5 line-clamp-1 hidden sm:block">{app.description}</p>
+                                            <div className="flex items-center gap-2 text-slate-500 text-xs mt-0.5">
+                                                <span>v{app.version}</span>
+                                                <span>•</span>
+                                                <span className="flex items-center gap-1">
+                                                    <Download className="w-3.5 h-3.5 text-blue-400" />
+                                                    {app.download_count ?? 0}
+                                                </span>
+                                            </div>
+                                            <p className="text-slate-400 text-xs mt-1 line-clamp-1 hidden sm:block">{app.description}</p>
                                         </div>
 
                                         {/* Actions */}
