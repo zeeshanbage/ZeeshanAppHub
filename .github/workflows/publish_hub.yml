@@ -29,6 +29,21 @@ jobs:
         working-directory: ./AndroidApp
         run: npm install
 
+      - name: Set Version dynamically from tag_name
+        working-directory: ./AndroidApp
+        run: |
+          node -e "
+            const fs = require('fs');
+            const tag = '${{ github.event.inputs.tag_name }}';
+            const runNumber = tag.replace('build-', '');
+            const newVer = '1.0.' + runNumber;
+            
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            pkg.version = newVer;
+            fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+            console.log('Temporary package.json version set to: ' + newVer);
+          "
+
       - name: Download APK from GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
