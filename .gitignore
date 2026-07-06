@@ -8,3 +8,5 @@ AndroidApp/android/.gradle/
 .env.*
 .vercel
 .env*
+*.keystore
+keystore-base64.txt
