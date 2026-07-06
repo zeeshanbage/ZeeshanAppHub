@@ -86,10 +86,38 @@ async function run() {
             apkDownloadUrl = `${r2PublicUrl.replace(/\/$/, '')}/${r2Key}`;
             console.log(`Successfully uploaded APK to R2: ${apkDownloadUrl}`);
         } catch (r2Error) {
-            console.warn(`Warning: R2 upload failed (${r2Error.message}). Falling back to GitHub Release URL...`);
-            const tagName = process.env.TAG_NAME || `build-${process.env.GITHUB_RUN_NUMBER || '28'}`;
-            apkDownloadUrl = `https://github.com/zeeshanbage/ZeeshanAppHub/releases/download/${tagName}/app-release.apk`;
-            console.log(`Fallback APK URL: ${apkDownloadUrl}`);
+            console.warn(`Warning: R2 upload failed (${r2Error.message}). Falling back to Supabase Storage...`);
+            try {
+                const apkBuffer = fs.readFileSync(apkPath);
+                const apkFileName = `ZeeshanHub_v${version.replace(/\./g, '')}_${Date.now()}.apk`;
+
+                console.log(`Uploading ${apkFileName} to Supabase storage 'apks' bucket...`);
+                const { error: uploadError } = await supabase.storage
+                    .from('apks')
+                    .upload(apkFileName, apkBuffer, {
+                        upsert: true,
+                        contentType: 'application/vnd.android.package-archive'
+                    });
+
+                if (uploadError) {
+                    throw new Error(`Supabase upload failed: ${uploadError.message}`);
+                }
+
+                // Get a long-lived signed URL (100 years)
+                const { data: signedData, error: signError } = await supabase.storage
+                    .from('apks')
+                    .createSignedUrl(apkFileName, 60 * 60 * 24 * 365 * 100);
+
+                if (signError || !signedData) {
+                    throw new Error(`Failed to sign Supabase URL: ${signError?.message}`);
+                }
+
+                apkDownloadUrl = signedData.signedUrl;
+                console.log(`Successfully uploaded APK to Supabase! URL: ${apkDownloadUrl}`);
+            } catch (fallbackError) {
+                console.error(`Error: Fallback to Supabase Storage also failed:`, fallbackError.message);
+                throw fallbackError;
+            }
         }
 
         // 6. Upload app icon to Supabase Storage dynamically from built assets
