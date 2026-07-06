@@ -66,9 +66,43 @@ if (missing.length > 0) {
 // 3. Get token from command line arguments
 const githubToken = process.argv[2];
 if (!githubToken) {
-    console.error('Usage: node setup_secrets.js <YOUR_GITHUB_PERSONAL_ACCESS_TOKEN>');
+    console.error('Usage: node setup_secrets.js <YOUR_GITHUB_PERSONAL_ACCESS_TOKEN> [KEYSTORE_PASSWORD] [KEY_ALIAS] [KEY_PASSWORD]');
     console.error('Generate a token at https://github.com/settings/tokens with "repo" scope.');
     process.exit(1);
+}
+
+const keystorePassword = process.argv[3];
+const keystoreAlias = process.argv[4];
+const keyPassword = process.argv[5];
+
+if (keystorePassword && keystoreAlias && keyPassword) {
+    const keystorePaths = [
+        path.join(__dirname, '../../my-upload-key.keystore'),
+        path.join(__dirname, '../my-upload-key.keystore'),
+        path.join(__dirname, '../../../my-upload-key.keystore')
+    ];
+    let keystorePath = '';
+    for (const p of keystorePaths) {
+        if (fs.existsSync(p)) {
+            keystorePath = p;
+            break;
+        }
+    }
+
+    if (keystorePath) {
+        console.log(`Found keystore file at: ${keystorePath}`);
+        const keystoreBuffer = fs.readFileSync(keystorePath);
+        secrets['SIGNING_KEY'] = keystoreBuffer.toString('base64');
+        secrets['KEYSTORE_PASSWORD'] = keystorePassword;
+        secrets['KEY_ALIAS'] = keystoreAlias;
+        secrets['KEY_PASSWORD'] = keyPassword;
+        requiredSecrets.push('SIGNING_KEY', 'KEYSTORE_PASSWORD', 'KEY_ALIAS', 'KEY_PASSWORD');
+        console.log('Keystore signing secrets added to upload list.');
+    } else {
+        console.warn('Warning: keystore file "my-upload-key.keystore" not found. Skipping signing secrets.');
+    }
+} else {
+    console.log('Notice: Keystore details not provided. Skipping keystore signing secrets upload.');
 }
 
 const repo = "zeeshanbage/ZeeshanAppHub";
