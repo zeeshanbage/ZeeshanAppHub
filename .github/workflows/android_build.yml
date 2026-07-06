@@ -14,8 +14,6 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      HAS_SIGNING_KEY: ${{ secrets.SIGNING_KEY != '' }}
     steps:
       - name: Checkout Source
         uses: actions/checkout@v4
@@ -67,21 +65,11 @@ jobs:
           echo "EXPO_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" >> .env
           echo "EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" >> .env
 
-      - name: Decode Keystore
-        if: ${{ env.HAS_SIGNING_KEY == 'true' }}
-        run: |
-          echo "${{ secrets.SIGNING_KEY }}" | base64 --decode > AndroidApp/android/app/release.keystore
-
       - name: Build Release APK
         working-directory: ./AndroidApp/android
         run: |
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
-        env:
-          SIGNING_KEYSTORE_FILE: ${{ env.HAS_SIGNING_KEY == 'true' && 'release.keystore' || '' }}
-          SIGNING_STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
 
       - name: Prepare properly named APKs for release
         run: |
