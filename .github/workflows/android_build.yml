@@ -71,12 +71,25 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleRelease --stacktrace
 
+      - name: Prepare properly named APKs for release
+        run: |
+          mkdir -p AndroidApp/android/app/build/outputs/apk/release/upload
+          cd AndroidApp/android/app/build/outputs/apk/release
+          runNumber="${{ github.run_number }}"
+          for f in *.apk; do
+            if [ -f "$f" ]; then
+              newName=$(echo "$f" | sed "s/app/ZeeshanHub_v1.0.${runNumber}/g" | sed "s/-release//g")
+              cp "$f" "upload/$newName"
+              echo "Prepared release copy: $newName"
+            fi
+          done
+
       - name: Create GitHub Release
         id: create_release
         uses: softprops/action-gh-release@v2
         if: github.event_name == 'workflow_dispatch' || github.ref == 'refs/heads/main'
         with:
-          files: AndroidApp/android/app/build/outputs/apk/release/*.apk
+          files: AndroidApp/android/app/build/outputs/apk/release/upload/*.apk
           name: "Zeeshan's App Hub v${{ github.run_number }}"
           tag_name: build-${{ github.run_number }}
           draft: false

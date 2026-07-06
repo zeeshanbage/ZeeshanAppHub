@@ -38,19 +38,37 @@ const packageName = "com.androidapp";
 console.log(`Publishing Hub update for ${appName} (${packageName}), version ${version}...`);
 
 // 3. Locate the compiled APK file
-const apkPaths = [
-    path.join(__dirname, '../android/app/build/outputs/apk/release/app-release.apk'),
-    path.join(__dirname, '../android/app/build/outputs/apk/release/app-arm64-v8a-release.apk')
-];
+const releaseDir = path.join(__dirname, '../android/app/build/outputs/apk/release');
 let apkPath = '';
-for (const p of apkPaths) {
-    if (fs.existsSync(p)) {
-        apkPath = p;
-        break;
+
+if (fs.existsSync(releaseDir)) {
+    try {
+        const files = fs.readdirSync(releaseDir);
+        const apkFile = files.find(f => f.endsWith('.apk') && fs.statSync(path.join(releaseDir, f)).isFile());
+        if (apkFile) {
+            apkPath = path.join(releaseDir, apkFile);
+            console.log(`Found APK dynamically: ${apkPath}`);
+        }
+    } catch (e) {
+        console.warn('Dynamic APK search warning:', e.message);
     }
 }
+
 if (!apkPath) {
-    console.error('Error: Compiled APK not found at either path:', apkPaths.join(' or '));
+    const apkPaths = [
+        path.join(__dirname, '../android/app/build/outputs/apk/release/app-release.apk'),
+        path.join(__dirname, '../android/app/build/outputs/apk/release/app-arm64-v8a-release.apk')
+    ];
+    for (const p of apkPaths) {
+        if (fs.existsSync(p)) {
+            apkPath = p;
+            break;
+        }
+    }
+}
+
+if (!apkPath) {
+    console.error('Error: Compiled APK not found.');
     process.exit(1);
 }
 
