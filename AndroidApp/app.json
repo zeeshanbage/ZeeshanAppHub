@@ -2,14 +2,14 @@
   "expo": {
     "name": "Zeeshan's App Hub",
     "slug": "AndroidApp",
-    "version": "0.0.1",
+    "version": "1.0.36",
     "orientation": "portrait",
     "userInterfaceStyle": "dark",
     "ios": {
       "supportsTablet": true
     },
     "android": {
-      "package": "com.androidapp",
+      "package": "com.zeeshan.apphub",
       "googleServicesFile": "./google-services.json",
       "permissions": [
         "android.permission.REQUEST_INSTALL_PACKAGES",

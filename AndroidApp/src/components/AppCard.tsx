@@ -1,17 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppModel } from '../config/supabase';
 import { AppCheckService, getFallbackPackageName, isUpdateRequired } from '../services/AppCheckService';
+import { useTheme, ThemeColors } from '../theme/ThemeContext';
 
 interface AppCardProps {
     app: AppModel;
     onPress: (app: AppModel) => void;
 }
 
-const { width } = Dimensions.get('window');
-
 export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
+    const theme = useTheme();
     const [btnText, setBtnText] = useState<'GET' | 'OPEN' | 'UPDATE'>('GET');
     const pkgName = app.package_name || getFallbackPackageName(app.name);
 
@@ -39,97 +39,119 @@ export const AppCard: React.FC<AppCardProps> = ({ app, onPress }) => {
         }
     };
 
+    const styles = getStyles(theme);
+
     return (
         <TouchableOpacity style={styles.card} activeOpacity={0.85} onPress={() => onPress(app)}>
-            {/* Accent stripe */}
-            <View style={styles.accentStripe} />
-
-            <View style={styles.content}>
-                {/* App Icon */}
-                <View style={styles.iconShadow}>
-                    <View style={styles.iconBox}>
-                        <Image source={{ uri: app.icon_url }} style={styles.icon} />
-                    </View>
+            {/* Top Row: Icon + Info + More Button */}
+            <View style={styles.topSection}>
+                <View style={styles.iconWrapper}>
+                    <Image source={{ uri: app.icon_url }} style={styles.icon} />
                 </View>
 
-                {/* Info */}
                 <View style={styles.info}>
                     <Text style={styles.name} numberOfLines={1}>{app.name}</Text>
                     <Text style={styles.desc} numberOfLines={1}>{app.description}</Text>
-                    <View style={styles.metaRow}>
-                        <View style={styles.versionPill}>
+                    
+                    {/* Status subtitle matching Stitch design */}
+                    <View style={styles.statusRow}>
+                        {btnText === 'UPDATE' ? (
+                            <View style={styles.updateStatus}>
+                                <Icon name="update" size={13} color={theme.primary} />
+                                <Text style={styles.updateStatusText}>Update available</Text>
+                            </View>
+                        ) : btnText === 'OPEN' ? (
+                            <View style={styles.installedStatus}>
+                                <Icon name="check-circle-outline" size={13} color={theme.primaryContainer} />
+                                <Text style={styles.installedStatusText}>Installed • v{app.version}</Text>
+                            </View>
+                        ) : (
                             <Text style={styles.versionText}>v{app.version}</Text>
-                        </View>
+                        )}
+                        
                         {app.tag === 'NEW' && (
                             <View style={styles.newTag}>
-                                <View style={styles.pulseDot} />
                                 <Text style={styles.newTagText}>NEW</Text>
                             </View>
                         )}
                         {app.tag === 'MOST DOWNLOADED' && (
                             <View style={styles.popularTag}>
-                                <Icon name="fire" size={11} color="#FBBF24" />
                                 <Text style={styles.popularTagText}>POPULAR</Text>
                             </View>
                         )}
                     </View>
                 </View>
 
-                {/* Get Button */}
+                <TouchableOpacity style={styles.moreBtn} onPress={() => onPress(app)}>
+                    <Icon name="dots-vertical" size={20} color={theme.onSurfaceVariant} />
+                </TouchableOpacity>
+            </View>
+
+            {/* Bottom Actions Row matching Stitch Card Buttons */}
+            <View style={styles.actionsRow}>
                 <TouchableOpacity 
-                    style={[styles.getBtn, btnText === 'OPEN' && styles.openBtn]} 
-                    activeOpacity={0.7} 
+                    style={[
+                        styles.primaryActionBtn,
+                        btnText === 'UPDATE' && styles.updateActionBtn,
+                        btnText === 'OPEN' && styles.openActionBtn
+                    ]} 
+                    activeOpacity={0.8} 
                     onPress={handleBtnPress}
                 >
-                    <Text style={styles.getBtnText}>{btnText}</Text>
+                    <Icon 
+                        name={btnText === 'OPEN' ? 'play-outline' : btnText === 'UPDATE' ? 'update' : 'download'} 
+                        size={16} 
+                        color={btnText === 'OPEN' ? theme.primaryContainer : theme.onPrimary} 
+                        style={{ marginRight: 6 }} 
+                    />
+                    <Text style={[
+                        styles.primaryActionBtnText,
+                        btnText === 'OPEN' && styles.openActionBtnText,
+                        btnText === 'UPDATE' && styles.updateActionBtnText
+                    ]}>
+                        {btnText === 'OPEN' ? 'Open App' : btnText === 'UPDATE' ? 'Update' : 'Get / Install'}
+                    </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                    style={styles.secondaryActionBtn} 
+                    activeOpacity={0.7} 
+                    onPress={() => onPress(app)}
+                >
+                    <Text style={styles.secondaryActionBtnText}>Details</Text>
                 </TouchableOpacity>
             </View>
         </TouchableOpacity>
     );
 };
 
-const styles = StyleSheet.create({
+const getStyles = (theme: ThemeColors) => StyleSheet.create({
     card: {
-        marginHorizontal: 20,
+        marginHorizontal: 16,
         marginBottom: 14,
         borderRadius: 20,
-        backgroundColor: '#161B2E',
-        overflow: 'hidden',
+        backgroundColor: theme.surfaceContainer,
         borderWidth: 1,
-        borderColor: 'rgba(167, 139, 250, 0.08)',
-        elevation: 6,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.12,
-        shadowRadius: 16,
-    },
-    accentStripe: {
-        height: 3,
-        backgroundColor: 'transparent',
-        // This creates a visual gradient effect via a thin gradient line
-        borderTopWidth: 1,
-        borderTopColor: 'rgba(167, 139, 250, 0.2)',
-    },
-    content: {
-        flexDirection: 'row',
-        alignItems: 'center',
+        borderColor: theme.cardBorder,
         padding: 16,
-    },
-    iconShadow: {
-        shadowColor: '#7C3AED',
+        shadowColor: '#000000',
         shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.25,
-        shadowRadius: 10,
-        elevation: 6,
+        shadowOpacity: theme.isDark ? 0.3 : 0.08,
+        shadowRadius: 8,
+        elevation: theme.isDark ? 4 : 2,
     },
-    iconBox: {
-        width: 58,
-        height: 58,
-        borderRadius: 16,
-        backgroundColor: '#1E2440',
+    topSection: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+    },
+    iconWrapper: {
+        width: 64,
+        height: 64,
+        borderRadius: 15,
+        backgroundColor: theme.surfaceVariant,
         overflow: 'hidden',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.06)',
+        borderColor: theme.cardBorder,
     },
     icon: {
         width: '100%',
@@ -139,113 +161,129 @@ const styles = StyleSheet.create({
     info: {
         flex: 1,
         marginLeft: 14,
-        justifyContent: 'center',
+        marginRight: 6,
     },
     name: {
-        fontSize: 16,
+        fontSize: 17,
         fontWeight: '700',
-        color: '#F1F5F9',
-        letterSpacing: 0.2,
-        marginBottom: 3,
+        color: theme.onSurface,
+        letterSpacing: -0.3,
     },
     desc: {
-        fontSize: 12,
-        color: '#64748B',
-        marginBottom: 8,
-        lineHeight: 16,
+        fontSize: 13,
+        color: theme.onSurfaceVariant,
+        marginTop: 3,
+        lineHeight: 18,
     },
-    metaRow: {
+    statusRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
+        gap: 8,
+        marginTop: 6,
     },
-    versionPill: {
-        backgroundColor: 'rgba(56, 189, 248, 0.12)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
+    updateStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    updateStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.primary,
+    },
+    installedStatus: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+    },
+    installedStatusText: {
+        fontSize: 12,
+        fontWeight: '600',
+        color: theme.primaryContainer,
     },
     versionText: {
-        fontSize: 11,
-        fontWeight: '700',
-        color: '#38BDF8',
-        letterSpacing: 0.3,
-    },
-    sizePill: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(167, 139, 250, 0.1)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
-        borderRadius: 6,
-        gap: 3,
-    },
-    sizeText: {
-        fontSize: 11,
-        fontWeight: '600',
-        color: '#A78BFA',
+        fontSize: 12,
+        color: theme.tertiary,
     },
     newTag: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(16, 185, 129, 0.12)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
+        backgroundColor: 'rgba(48, 209, 88, 0.15)',
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
         borderRadius: 6,
-        gap: 4,
         borderWidth: 1,
-        borderColor: 'rgba(16, 185, 129, 0.25)',
+        borderColor: 'rgba(48, 209, 88, 0.3)',
     },
     newTagText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
-        color: '#10B981',
-        letterSpacing: 0.3,
-    },
-    pulseDot: {
-        width: 5,
-        height: 5,
-        borderRadius: 2.5,
-        backgroundColor: '#10B981',
+        color: theme.primaryContainer,
+        letterSpacing: 0.5,
     },
     popularTag: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        backgroundColor: 'rgba(245, 158, 11, 0.12)',
-        paddingHorizontal: 8,
-        paddingVertical: 3,
+        backgroundColor: 'rgba(255, 159, 10, 0.15)',
+        paddingHorizontal: 7,
+        paddingVertical: 2.5,
         borderRadius: 6,
-        gap: 3,
         borderWidth: 1,
-        borderColor: 'rgba(245, 158, 11, 0.25)',
+        borderColor: 'rgba(255, 159, 10, 0.3)',
     },
     popularTagText: {
-        fontSize: 11,
+        fontSize: 10,
         fontWeight: '700',
-        color: '#F59E0B',
-        letterSpacing: 0.3,
+        color: '#FF9F0A',
+        letterSpacing: 0.5,
     },
-    getBtn: {
-        backgroundColor: '#7C3AED',
-        paddingHorizontal: 16,
+    moreBtn: {
+        padding: 4,
+    },
+    actionsRow: {
+        flexDirection: 'row',
+        gap: 10,
+        marginTop: 14,
+    },
+    primaryActionBtn: {
+        flex: 1,
+        flexDirection: 'row',
+        backgroundColor: theme.primary,
         paddingVertical: 10,
-        borderRadius: 12,
-        shadowColor: '#7C3AED',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.4,
-        shadowRadius: 8,
-        elevation: 5,
-        minWidth: 72,
+        borderRadius: 20,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    openBtn: {
-        backgroundColor: '#059669',
-        shadowColor: '#059669',
+    primaryActionBtnText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: theme.onPrimary,
+        letterSpacing: 0.2,
     },
-    getBtnText: {
-        color: '#FFFFFF',
-        fontSize: 12,
-        fontWeight: '800',
-        letterSpacing: 0.8,
+    updateActionBtn: {
+        backgroundColor: theme.primary,
+    },
+    updateActionBtnText: {
+        color: theme.onPrimary,
+    },
+    openActionBtn: {
+        backgroundColor: 'rgba(48, 209, 88, 0.15)',
+        borderWidth: 1,
+        borderColor: 'rgba(48, 209, 88, 0.3)',
+    },
+    openActionBtnText: {
+        color: theme.primaryContainer,
+    },
+    secondaryActionBtn: {
+        flex: 1,
+        backgroundColor: theme.surfaceContainerHigh,
+        borderWidth: 1,
+        borderColor: theme.outlineVariant,
+        paddingVertical: 10,
+        borderRadius: 20,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    secondaryActionBtnText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: theme.onSurface,
+        letterSpacing: 0.2,
     },
 });

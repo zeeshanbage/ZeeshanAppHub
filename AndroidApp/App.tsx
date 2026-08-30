@@ -13,6 +13,9 @@ import {
   LogBox,
   Alert,
   Share,
+  Modal,
+  TouchableOpacity as RNTouchableOpacity,
+  useColorScheme,
 } from 'react-native';
 
 LogBox.ignoreLogs([
@@ -26,6 +29,7 @@ import { AppCheckService, getFallbackPackageName, isUpdateRequired } from './src
 import messaging from '@react-native-firebase/messaging';
 import { PermissionsAndroid, Platform } from 'react-native';
 import { trackInstall, logFatalCrash } from './src/config/telemetry';
+import { ThemeContext, DarkTheme, LightTheme, ThemeColors } from './src/theme/ThemeContext';
 
 // Handle JS Crashes
 const globalErrorHandler = (error: any, isFatal?: boolean) => {
@@ -38,18 +42,8 @@ const globalErrorHandler = (error: any, isFatal?: boolean) => {
   if (isFatal) {
     Alert.alert(
       'Unexpected Error',
-      'The App Hub encountered a critical error. Your crash log has been securely tracked, but you can also share it manually with the developer.',
-      [
-        {
-          text: 'Share Log',
-          onPress: () => {
-             Share.share({ message: `Fatal App Crash Log:\n\n${errorString}` });
-          }
-        },
-        {
-          text: 'Close',
-        }
-      ]
+      'The App Hub encountered a critical error.',
+      [{ text: 'Close' }]
     );
   }
 };
@@ -68,7 +62,7 @@ if (globalAny.ErrorUtils) {
 const { width, height } = Dimensions.get('window');
 
 // --- Skeleton Card Component ---
-const SkeletonCard = () => {
+const SkeletonCard = ({ theme }: { theme: ThemeColors }) => {
   const shimmer = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -97,56 +91,52 @@ const SkeletonCard = () => {
     outputRange: [0.3, 0.7],
   });
 
+  const styles = getSkeletonStyles(theme);
+
   return (
-    <View style={skeletonStyles.card}>
-      <Animated.View style={[skeletonStyles.iconBox, { opacity }]} />
-      <View style={skeletonStyles.textArea}>
-        <Animated.View style={[skeletonStyles.lineWide, { opacity }]} />
-        <Animated.View style={[skeletonStyles.lineNarrow, { opacity }]} />
+    <View style={styles.card}>
+      <Animated.View style={[styles.iconBox, { opacity }]} />
+      <View style={styles.textArea}>
+        <Animated.View style={[styles.lineWide, { opacity }]} />
+        <Animated.View style={[styles.lineNarrow, { opacity }]} />
         <View style={{ flexDirection: 'row', gap: 6, marginTop: 6 }}>
-          <Animated.View style={[skeletonStyles.pill, { opacity }]} />
-          <Animated.View style={[skeletonStyles.pill, { opacity, width: 50 }]} />
+          <Animated.View style={[styles.pill, { opacity }]} />
         </View>
       </View>
-      <Animated.View style={[skeletonStyles.btn, { opacity }]} />
     </View>
   );
 };
 
-const SkeletonList = () => (
-  <View style={{ paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 56 }}>
-    {/* Skeleton header */}
-    <View style={skeletonStyles.header}>
-      <View>
-        <View style={[skeletonStyles.lineNarrow, { width: 100, marginBottom: 8 }]} />
-        <View style={[skeletonStyles.lineWide, { width: 160, height: 26 }]} />
+const SkeletonList = ({ theme }: { theme: ThemeColors }) => {
+  const styles = getSkeletonStyles(theme);
+  return (
+    <View style={{ paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 56 }}>
+      <View style={styles.header}>
+        <View style={[styles.lineWide, { width: 180, height: 28 }]} />
       </View>
-      <View style={skeletonStyles.avatarSkel} />
+      {[0, 1, 2, 3].map(i => <SkeletonCard key={i} theme={theme} />)}
     </View>
-    <View style={[skeletonStyles.lineNarrow, { width: 80, marginLeft: 22, marginBottom: 16 }]} />
-    {[0, 1, 2, 3].map(i => <SkeletonCard key={i} />)}
-  </View>
-);
+  );
+};
 
 function App(): React.JSX.Element {
+  const systemColorScheme = useColorScheme();
+  const theme = systemColorScheme === 'light' ? LightTheme : DarkTheme;
+  const styles = getStyles(theme);
+
   const [apps, setApps] = useState<AppModel[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AppModel | null>(null);
   const [popupVisible, setPopupVisible] = useState(false);
-
-  console.log('App component mounting. Current window dimensions:', Dimensions.get('window'));
+  const [sortBy, setSortBy] = useState<'recent' | 'name' | 'downloads'>('recent');
 
   const loadApps = async () => {
-    console.log('loadApps: Fetching apps...');
     try {
       const rawData = await fetchApps();
-      console.log('loadApps: Successfully loaded apps. Count:', rawData.length);
-      
       const nowTime = Date.now();
       const sevenDaysMs = 7 * 24 * 60 * 60 * 1000;
 
-      // 1. Fill fallbacks if database columns don't exist yet
       const appsWithMetrics = rawData.map((app, index) => {
         const download_count = (app.download_count !== undefined && app.download_count !== null)
           ? app.download_count
@@ -163,7 +153,6 @@ function App(): React.JSX.Element {
         };
       });
 
-      // 2. Compute "MOST DOWNLOADED" threshold
       let maxDownloads = 0;
       appsWithMetrics.forEach(app => {
         const count = app.download_count || 0;
@@ -172,7 +161,6 @@ function App(): React.JSX.Element {
         }
       });
 
-      // 3. Assign tags and check installation status
       const processedData = await Promise.all(appsWithMetrics.map(async (app) => {
         let tag: 'NEW' | 'MOST DOWNLOADED' | null = null;
         
@@ -198,6 +186,12 @@ function App(): React.JSX.Element {
 
       // Sort: Installed apps on top, updates prioritized on top of those
       const sortedData = processedData.sort((a, b) => {
+        if (sortBy === 'name') {
+          return a.name.localeCompare(b.name);
+        }
+        if (sortBy === 'downloads') {
+          return (b.download_count || 0) - (a.download_count || 0);
+        }
         if (a.isInstalled && !b.isInstalled) return -1;
         if (!a.isInstalled && b.isInstalled) return 1;
         if (a.isInstalled && b.isInstalled) {
@@ -211,7 +205,6 @@ function App(): React.JSX.Element {
     } catch (error) {
       console.error('loadApps error:', error);
     } finally {
-      console.log('loadApps: Setting loading to false');
       setLoading(false);
       setRefreshing(false);
     }
@@ -231,16 +224,13 @@ function App(): React.JSX.Element {
         authStatus === messaging.AuthorizationStatus.PROVISIONAL
       ) {
         messaging().subscribeToTopic('new_releases')
-          .then(() => console.log('Subscribed to "new_releases" topic!'))
           .catch(e => console.log('Topic subscription error:', e));
       }
     };
     requestPermissions();
 
-    // Handle tapping a notification when app is in background
     const unsubscribe = messaging().onNotificationOpenedApp(remoteMessage => {
       if (remoteMessage.data?.appId) {
-        // App id is passed from the admin server
         setTimeout(() => {
            setApps(currentApps => {
                const targetApp = currentApps.find(a => a.id === remoteMessage.data!.appId);
@@ -254,26 +244,8 @@ function App(): React.JSX.Element {
       }
     });
 
-    // Handle opening app from a cold state via notification
-    messaging()
-      .getInitialNotification()
-      .then(remoteMessage => {
-        if (remoteMessage && remoteMessage.data?.appId) {
-          setTimeout(() => {
-             setApps(currentApps => {
-                 const targetApp = currentApps.find(a => a.id === remoteMessage.data!.appId);
-                 if (targetApp) {
-                   setSelectedApp(targetApp);
-                   setPopupVisible(true);
-                 }
-                 return currentApps;
-             });
-          }, 1000);
-        }
-      });
-
-    return unsubscribe;
-  }, []);
+    return () => unsubscribe();
+  }, [sortBy]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -288,300 +260,299 @@ function App(): React.JSX.Element {
   const closePopup = () => {
     setPopupVisible(false);
     setTimeout(() => setSelectedApp(null), 350);
-    // Refresh apps list to update sorting and status immediately
     loadApps();
   };
 
+  const updateCount = apps.filter(a => (a as any).isUpdateAvailable).length;
+
   const renderHeader = () => (
     <View style={styles.header}>
+      {/* TopAppBar */}
       <View style={styles.topBar}>
-        <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={styles.greeting}>Welcome back</Text>
-            <Icon name="hand-wave" size={16} color="#FBBF24" />
+        <View style={styles.topBarLeft}>
+          <View style={styles.menuIconBtn}>
+            <Icon name="view-grid-outline" size={24} color={theme.primary} />
           </View>
-          <Text style={styles.title}>Zeeshan Hub</Text>
+          <Text style={styles.title}>Zeeshan's App Hub</Text>
         </View>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarLetter}>Z</Text>
+        <View style={styles.avatarPill}>
+          <Text style={styles.avatarText}>Z</Text>
         </View>
       </View>
 
-      <View style={styles.sectionRow}>
-        <Icon name="apps" size={18} color="#A78BFA" />
-        <Text style={styles.sectionTitle}>Your Apps</Text>
-        <View style={styles.countBadge}>
-          <Text style={styles.countText}>{apps.length}</Text>
+      {/* Controls & Status Bar (Sort by, Storage, Update All) */}
+      <View style={styles.controlsSection}>
+        <View style={styles.sortPill}>
+          <Text style={styles.sortLabel}>Sort by:</Text>
+          <RNTouchableOpacity 
+            style={styles.sortBtn}
+            onPress={() => {
+              setSortBy(prev => prev === 'recent' ? 'name' : prev === 'name' ? 'downloads' : 'recent');
+            }}
+          >
+            <Text style={styles.sortValueText}>
+              {sortBy === 'recent' ? 'Last Used' : sortBy === 'name' ? 'Name (A-Z)' : 'Popularity'}
+            </Text>
+            <Icon name="chevron-down" size={16} color={theme.onSurface} />
+          </RNTouchableOpacity>
+        </View>
+
+        <View style={styles.controlButtons}>
+          <RNTouchableOpacity 
+            style={styles.controlBtnSecondary}
+            onPress={onRefresh}
+          >
+            <Icon name="database-outline" size={16} color={theme.onSurface} style={{ marginRight: 5 }} />
+            <Text style={styles.controlBtnSecondaryText}>{apps.length} Apps</Text>
+          </RNTouchableOpacity>
+
+          {updateCount > 0 && (
+            <RNTouchableOpacity 
+              style={styles.controlBtnPrimary}
+              onPress={() => {
+                const firstUpdate = apps.find(a => (a as any).isUpdateAvailable);
+                if (firstUpdate) handleAppPress(firstUpdate);
+              }}
+            >
+              <Icon name="update" size={16} color={theme.onPrimary} style={{ marginRight: 4 }} />
+              <Text style={styles.controlBtnPrimaryText}>Update ({updateCount})</Text>
+            </RNTouchableOpacity>
+          )}
         </View>
       </View>
     </View>
   );
 
-  console.log('App rendering. state:', { loading, refreshing, appsCount: apps.length });
-
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-
-      {/* Layered background for depth */}
-      <View style={styles.bgBase} />
-      <View style={styles.bgOrb1} />
-      <View style={styles.bgOrb2} />
-      <View style={styles.bgOrb3} />
-      <View style={styles.bgTopStrip} />
-
-      {loading && !refreshing ? (
-        <SkeletonList />
-      ) : (
-        <FlatList
-          data={apps}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => <AppCard app={item} onPress={handleAppPress} />}
-          ListHeaderComponent={renderHeader}
-          contentContainerStyle={styles.listContent}
-          showsVerticalScrollIndicator={false}
-          refreshControl={
-            <RefreshControl
-              refreshing={refreshing}
-              onRefresh={onRefresh}
-              tintColor="#A78BFA"
-              colors={['#7C3AED']}
-              progressBackgroundColor="#161B2E"
-            />
-          }
-          ListEmptyComponent={
-            <View style={styles.emptyWrap}>
-              <View style={styles.emptyIcon}>
-                <Icon name="package-variant" size={48} color="rgba(167, 139, 250, 0.4)" />
-              </View>
-              <Text style={styles.emptyTitle}>No apps yet</Text>
-              <Text style={styles.emptyDesc}>Upload your first app via the Admin Portal to see it here.</Text>
-            </View>
-          }
+    <ThemeContext.Provider value={theme}>
+      <View style={styles.container}>
+        <StatusBar 
+          barStyle={theme.isDark ? 'light-content' : 'dark-content'} 
+          backgroundColor={theme.surface} 
+          translucent 
         />
-      )}
 
-      <AppDetailsPopup
-        app={selectedApp}
-        visible={popupVisible}
-        onClose={closePopup}
-      />
-    </View>
+        {loading && !refreshing ? (
+          <SkeletonList theme={theme} />
+        ) : (
+          <FlatList
+            data={apps}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => <AppCard app={item} onPress={handleAppPress} />}
+            ListHeaderComponent={renderHeader}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={refreshing}
+                onRefresh={onRefresh}
+                tintColor={theme.primary}
+                colors={[theme.primary]}
+                progressBackgroundColor={theme.surfaceContainerHigh}
+              />
+            }
+            ListEmptyComponent={
+              <View style={styles.emptyWrap}>
+                <Icon name="book-open-page-variant" size={48} color={theme.outline} />
+                <Text style={styles.emptyTitle}>No apps found</Text>
+                <Text style={styles.emptyDesc}>Add applications from your admin portal.</Text>
+              </View>
+            }
+          />
+        )}
+
+        <AppDetailsPopup
+          app={selectedApp}
+          visible={popupVisible}
+          onClose={closePopup}
+        />
+      </View>
+    </ThemeContext.Provider>
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (theme: ThemeColors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#080B16',
+    backgroundColor: theme.surface,
   },
-  // Multi-layer background
-  bgBase: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#080B16',
-  },
-  bgOrb1: {
-    position: 'absolute',
-    top: -height * 0.12,
-    left: -width * 0.3,
-    width: width * 0.9,
-    height: width * 0.9,
-    borderRadius: width * 0.45,
-    backgroundColor: 'rgba(124, 58, 237, 0.06)',
-  },
-  bgOrb2: {
-    position: 'absolute',
-    top: height * 0.4,
-    right: -width * 0.35,
-    width: width,
-    height: width,
-    borderRadius: width * 0.5,
-    backgroundColor: 'rgba(56, 189, 248, 0.035)',
-  },
-  bgOrb3: {
-    position: 'absolute',
-    bottom: -height * 0.15,
-    left: -width * 0.1,
-    width: width * 0.7,
-    height: width * 0.7,
-    borderRadius: width * 0.35,
-    backgroundColor: 'rgba(167, 139, 250, 0.03)',
-  },
-  bgTopStrip: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: StatusBar.currentHeight ? StatusBar.currentHeight + 80 : 120,
-    backgroundColor: 'rgba(124, 58, 237, 0.04)',
-  },
-  // List
   listContent: {
-    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 16 : 56,
-    paddingBottom: 40,
+    paddingTop: StatusBar.currentHeight ? StatusBar.currentHeight + 12 : 48,
+    paddingBottom: 32,
   },
-  // Header
   header: {
-    paddingHorizontal: 22,
+    paddingHorizontal: 16,
     marginBottom: 8,
   },
   topBar: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 28,
+    marginBottom: 20,
   },
-  greeting: {
-    fontSize: 14,
-    color: '#64748B',
-    fontWeight: '500',
-    letterSpacing: 0.3,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '800',
-    color: '#F8FAFC',
-    letterSpacing: 0.3,
-    marginTop: 4,
-  },
-  avatar: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: '#7C3AED',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#7C3AED',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-  },
-  avatarLetter: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  sectionRow: {
+  topBarLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
+    gap: 12,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#CBD5E1',
-    letterSpacing: 0.3,
+  menuIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: theme.isDark ? 'rgba(10, 132, 255, 0.12)' : 'rgba(0, 122, 255, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  countBadge: {
-    backgroundColor: 'rgba(124, 58, 237, 0.15)',
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(124, 58, 237, 0.25)',
-  },
-  countText: {
-    fontSize: 12,
+  title: {
+    fontSize: 24,
     fontWeight: '800',
-    color: '#A78BFA',
+    color: theme.onSurface,
+    letterSpacing: -0.4,
   },
-  // Empty state
+  avatarPill: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: theme.primary,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '800',
+  },
+  controlsSection: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  sortPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surfaceContainer,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
+  },
+  sortLabel: {
+    fontSize: 13,
+    color: theme.onSurfaceVariant,
+    marginRight: 6,
+  },
+  sortBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  sortValueText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.primary,
+  },
+  controlButtons: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  controlBtnSecondary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.surfaceContainer,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
+  },
+  controlBtnSecondaryText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.onSurface,
+  },
+  controlBtnPrimary: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: theme.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+  controlBtnPrimaryText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#FFFFFF',
+  },
   emptyWrap: {
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: height * 0.12,
     paddingHorizontal: 40,
-  },
-  emptyIcon: {
-    width: 90,
-    height: 90,
-    borderRadius: 28,
-    backgroundColor: 'rgba(124, 58, 237, 0.06)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 18,
-    borderWidth: 1,
-    borderColor: 'rgba(167, 139, 250, 0.1)',
+    gap: 10,
   },
   emptyTitle: {
-    color: '#F1F5F9',
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    marginBottom: 8,
+    color: theme.onSurface,
+    marginTop: 8,
   },
   emptyDesc: {
-    color: '#64748B',
     fontSize: 14,
+    color: theme.onSurfaceVariant,
     textAlign: 'center',
-    lineHeight: 22,
+    lineHeight: 20,
   },
 });
 
-const skeletonStyles = StyleSheet.create({
+const getSkeletonStyles = (theme: ThemeColors) => StyleSheet.create({
   card: {
-    marginHorizontal: 20,
+    marginHorizontal: 16,
     marginBottom: 14,
     borderRadius: 20,
-    backgroundColor: '#161B2E',
+    backgroundColor: theme.surfaceContainer,
     padding: 16,
+    borderWidth: 1,
+    borderColor: theme.cardBorder,
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.03)',
   },
   iconBox: {
-    width: 58,
-    height: 58,
-    borderRadius: 16,
-    backgroundColor: '#1E2440',
+    width: 64,
+    height: 64,
+    borderRadius: 15,
+    backgroundColor: theme.surfaceVariant,
   },
   textArea: {
     flex: 1,
     marginLeft: 14,
+    justifyContent: 'center',
   },
   lineWide: {
-    width: '75%',
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: '#1E2440',
+    height: 16,
+    width: '60%',
+    backgroundColor: theme.surfaceVariant,
+    borderRadius: 4,
     marginBottom: 8,
   },
   lineNarrow: {
-    width: '45%',
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#1E2440',
+    height: 12,
+    width: '85%',
+    backgroundColor: theme.surfaceVariant,
+    borderRadius: 4,
   },
   pill: {
-    width: 40,
-    height: 18,
-    borderRadius: 6,
-    backgroundColor: '#1E2440',
-  },
-  btn: {
-    width: 62,
-    height: 38,
-    borderRadius: 12,
-    backgroundColor: '#1E2440',
+    height: 16,
+    width: 60,
+    backgroundColor: theme.surfaceVariant,
+    borderRadius: 4,
   },
   header: {
-    paddingHorizontal: 22,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  avatarSkel: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
-    backgroundColor: '#1E2440',
+    paddingHorizontal: 16,
+    marginBottom: 20,
   },
 });
 

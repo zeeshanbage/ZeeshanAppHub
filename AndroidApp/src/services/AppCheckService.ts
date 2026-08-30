@@ -10,8 +10,9 @@ export interface AppInfo {
 
 export const getFallbackPackageName = (appName: string): string => {
     const name = appName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (name.includes('zeeshansapphub') || name.includes('zeeshanapphub') || name.includes('apphub')) return 'com.androidapp';
     if (name.includes('revancedmanager')) return 'com.revanced.net.revancedmanager';
-    if (name.includes('youtuberevanced')) return 'com.google.android.youtube';
+    if (name.includes('youtuberevanced') || name.includes('revancedyoutube')) return 'app.revanced.android.youtube';
     if (name.includes('seal')) return 'com.github.junkfood.seal';
     if (name.includes('truecaller')) return 'com.truecaller';
     if (name.includes('capcut')) return 'com.lemon.lv.overseas';
@@ -84,6 +85,65 @@ export class AppCheckService {
             return await AppCheckModule.launchApp(packageName);
         } catch (e) {
             console.error('Failed to launch app:', packageName, e);
+            return false;
+        }
+    }
+
+    /**
+     * Show or update ongoing download notification.
+     */
+    static async showDownloadProgressNotification(
+        notificationId: number,
+        title: string,
+        progress: number,
+        speedText: string = '',
+        sizeText: string = ''
+    ): Promise<boolean> {
+        if (!AppCheckModule?.showDownloadProgressNotification) return false;
+        try {
+            return await AppCheckModule.showDownloadProgressNotification(
+                notificationId,
+                title,
+                progress,
+                speedText,
+                sizeText
+            );
+        } catch (e) {
+            console.error('Failed to show download progress notification:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Show download completed notification with install trigger.
+     */
+    static async showDownloadCompleteNotification(
+        notificationId: number,
+        title: string,
+        filePath: string
+    ): Promise<boolean> {
+        if (!AppCheckModule?.showDownloadCompleteNotification) return false;
+        try {
+            return await AppCheckModule.showDownloadCompleteNotification(
+                notificationId,
+                title,
+                filePath
+            );
+        } catch (e) {
+            console.error('Failed to show download complete notification:', e);
+            return false;
+        }
+    }
+
+    /**
+     * Dismiss notification by ID.
+     */
+    static async dismissNotification(notificationId: number): Promise<boolean> {
+        if (!AppCheckModule?.dismissNotification) return false;
+        try {
+            return await AppCheckModule.dismissNotification(notificationId);
+        } catch (e) {
+            console.error('Failed to dismiss notification:', e);
             return false;
         }
     }

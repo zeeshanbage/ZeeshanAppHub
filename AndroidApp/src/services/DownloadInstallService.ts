@@ -1,12 +1,40 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as IntentLauncher from 'expo-intent-launcher';
 import { Platform, ToastAndroid } from 'react-native';
+import { AppCheckService } from './AppCheckService';
 
-type DownloadProgressCallback = (progress: number) => void;
+export interface DownloadProgressState {
+    progress: number; // 0 to 1
+    bytesWritten: number;
+    totalBytes: number;
+    formattedWritten: string;
+    formattedTotal: string;
+    formattedSpeed: string;
+}
+
+type DownloadProgressCallback = (state: DownloadProgressState) => void;
+
+function formatBytes(bytes: number): string {
+    if (bytes <= 0 || isNaN(bytes)) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${(bytes / Math.pow(k, i)).toFixed(1)} ${sizes[i]}`;
+}
+
+function getNotificationId(fileName: string): number {
+    let hash = 0;
+    for (let i = 0; i < fileName.length; i++) {
+        hash = (hash << 5) - hash + fileName.charCodeAt(i);
+        hash |= 0;
+    }
+    return Math.abs(hash % 100000) + 1000;
+}
 
 export class DownloadInstallService {
     private static listeners: Map<string, DownloadProgressCallback[]> = new Map();
-    private static activeProgress: Map<string, number> = new Map();
+    private static activeProgress: Map<string, DownloadProgressState> = new Map();
+    private static speedTrackers: Map<string, { lastBytes: number; lastTime: number; speed: number }> = new Map();
 
     /**
      * Subscribe to download progress for a specific file.
@@ -33,15 +61,37 @@ export class DownloadInstallService {
         }
     }
 
-    private static updateProgress(fileName: string, progress: number) {
-        this.activeProgress.set(fileName, progress);
+    private static updateProgress(
+        fileName: string,
+        bytesWritten: number,
+        totalBytes: number,
+        calculatedSpeed?: number
+    ) {
+        const progress = totalBytes > 0 ? Math.min(1, Math.max(0, bytesWritten / totalBytes)) : 0;
+        
+        let speedStr = '0 KB/s';
+        if (calculatedSpeed !== undefined && calculatedSpeed > 0) {
+            speedStr = `${formatBytes(calculatedSpeed)}/s`;
+        }
+
+        const state: DownloadProgressState = {
+            progress,
+            bytesWritten,
+            totalBytes,
+            formattedWritten: formatBytes(bytesWritten),
+            formattedTotal: totalBytes > 0 ? formatBytes(totalBytes) : 'Unknown',
+            formattedSpeed: speedStr,
+        };
+
+        this.activeProgress.set(fileName, state);
         if (this.listeners.has(fileName)) {
-            this.listeners.get(fileName)!.forEach(cb => cb(progress));
+            this.listeners.get(fileName)!.forEach(cb => cb(state));
         }
     }
 
     private static clearTracking(fileName: string) {
         this.activeProgress.delete(fileName);
+        this.speedTrackers.delete(fileName);
     }
 
     /**
@@ -74,10 +124,13 @@ export class DownloadInstallService {
      */
     static async downloadAndInstall(
         url: string,
-        fileName: string
+        fileName: string,
+        appName?: string
     ): Promise<void> {
         if (Platform.OS !== 'android') return;
 
+        const displayName = appName || fileName.replace(/\.apk$/i, '');
+        const notifId = getNotificationId(fileName);
         const filePath = `${FileSystem.cacheDirectory}${fileName}`;
 
         // 1. Check if it's already downloaded completely
@@ -95,7 +148,23 @@ export class DownloadInstallService {
         }
 
         console.log(`Downloading ${url} to ${filePath}`);
-        this.updateProgress(fileName, 0);
+        this.updateProgress(fileName, 0, 0, 0);
+        this.speedTrackers.set(fileName, {
+            lastBytes: 0,
+            lastTime: Date.now(),
+            speed: 0,
+        });
+
+        // Show initial notification
+        AppCheckService.showDownloadProgressNotification(
+            notifId,
+            `Downloading ${displayName}`,
+            0,
+            '',
+            'Starting download...'
+        );
+
+        let lastNotifTime = Date.now();
 
         try {
             const downloadResumable = FileSystem.createDownloadResumable(
@@ -103,9 +172,50 @@ export class DownloadInstallService {
                 filePath,
                 {},
                 (downloadProgress) => {
-                    if (downloadProgress.totalBytesExpectedToWrite > 0) {
-                        const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-                        this.updateProgress(fileName, progress);
+                    const now = Date.now();
+                    const tracker = this.speedTrackers.get(fileName);
+                    let currentSpeed = 0;
+
+                    if (tracker) {
+                        const timeDelta = (now - tracker.lastTime) / 1000; // in seconds
+                        // Update speed estimate every 400ms or more
+                        if (timeDelta >= 0.4) {
+                            const bytesDelta = downloadProgress.totalBytesWritten - tracker.lastBytes;
+                            const instantSpeed = bytesDelta > 0 ? bytesDelta / timeDelta : 0;
+                            
+                            // Exponential moving average for smooth display
+                            currentSpeed = tracker.speed > 0 
+                                ? tracker.speed * 0.4 + instantSpeed * 0.6 
+                                : instantSpeed;
+
+                            tracker.lastBytes = downloadProgress.totalBytesWritten;
+                            tracker.lastTime = now;
+                            tracker.speed = currentSpeed;
+                        } else {
+                            currentSpeed = tracker.speed;
+                        }
+                    }
+
+                    this.updateProgress(
+                        fileName,
+                        downloadProgress.totalBytesWritten,
+                        downloadProgress.totalBytesExpectedToWrite,
+                        currentSpeed
+                    );
+
+                    // Throttle notification updates to once every 750ms to avoid flooding Android system
+                    if (now - lastNotifTime >= 750) {
+                        lastNotifTime = now;
+                        const currentState = this.activeProgress.get(fileName);
+                        if (currentState) {
+                            AppCheckService.showDownloadProgressNotification(
+                                notifId,
+                                `Downloading ${displayName}`,
+                                currentState.progress,
+                                currentState.formattedSpeed,
+                                `${currentState.formattedWritten} / ${currentState.formattedTotal}`
+                            );
+                        }
                     }
                 }
             );
@@ -114,8 +224,18 @@ export class DownloadInstallService {
 
             if (response && response.status === 200) {
                 console.log('Download complete. Triggering install intent...');
-                this.updateProgress(fileName, 1);
+                const state = this.activeProgress.get(fileName);
+                const total = state?.totalBytes || 1;
+                this.updateProgress(fileName, total, total, 0);
                 this.clearTracking(fileName);
+
+                // Show persistent download complete notification with Install action
+                await AppCheckService.showDownloadCompleteNotification(
+                    notifId,
+                    displayName,
+                    filePath
+                );
+
                 await this.installApk(filePath);
             } else {
                 throw new Error(`Download failed with status: ${response ? response.status : 'unknown'}`);
@@ -124,6 +244,8 @@ export class DownloadInstallService {
             console.error('Download/Install error:', error);
             ToastAndroid.show(`Failed to download: ${error.message}`, ToastAndroid.LONG);
             this.clearTracking(fileName);
+            // Dismiss notification if download failed
+            AppCheckService.dismissNotification(notifId);
             // Clean up partial download so it does not leave a corrupted APK file
             try {
                 const fileInfo = await FileSystem.getInfoAsync(filePath);
