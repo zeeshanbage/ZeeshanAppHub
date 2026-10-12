@@ -24,7 +24,6 @@ LogBox.ignoreLogs([
 import { fetchApps, AppModel } from './src/config/supabase';
 import { AppCard } from './src/components/AppCard';
 import { AppDetailsPopup } from './src/components/AppDetailsPopup';
-import { AdminModal } from './src/components/admin/AdminModal';
 import Icon from '@expo/vector-icons/MaterialCommunityIcons';
 import { AppCheckService, getFallbackPackageName, isUpdateRequired } from './src/services/AppCheckService';
 import messaging from '@react-native-firebase/messaging';
@@ -130,7 +129,6 @@ function App(): React.JSX.Element {
   const [refreshing, setRefreshing] = useState(false);
   const [selectedApp, setSelectedApp] = useState<AppModel | null>(null);
   const [popupVisible, setPopupVisible] = useState(false);
-  const [adminVisible, setAdminVisible] = useState(false);
   const [sortBy, setSortBy] = useState<'recent' | 'name' | 'downloads'>('recent');
 
   const loadApps = async () => {
@@ -277,22 +275,8 @@ function App(): React.JSX.Element {
           </View>
           <Text style={styles.title}>Zeeshan's App Hub</Text>
         </View>
-        <View style={styles.headerRightActions}>
-          <RNTouchableOpacity
-            style={styles.adminBadgeBtn}
-            onPress={() => setAdminVisible(true)}
-            accessibilityLabel="Admin Section"
-          >
-            <Icon name="shield-lock-outline" size={20} color={theme.primary} />
-          </RNTouchableOpacity>
-
-          <RNTouchableOpacity
-            style={styles.avatarPill}
-            onPress={() => setAdminVisible(true)}
-            accessibilityLabel="Admin Profile"
-          >
-            <Text style={styles.avatarText}>Z</Text>
-          </RNTouchableOpacity>
+        <View style={styles.avatarPill}>
+          <Text style={styles.avatarText}>Z</Text>
         </View>
       </View>
 
@@ -382,12 +366,6 @@ function App(): React.JSX.Element {
           visible={popupVisible}
           onClose={closePopup}
         />
-
-        <AdminModal
-          visible={adminVisible}
-          onClose={() => setAdminVisible(false)}
-          onAppListChanged={loadApps}
-        />
       </View>
     </ThemeContext.Provider>
   );
@@ -443,19 +421,6 @@ const getStyles = (theme: ThemeColors) => StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 15,
     fontWeight: '800',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  adminBadgeBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: theme.isDark ? 'rgba(10, 132, 255, 0.12)' : 'rgba(0, 122, 255, 0.1)',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   controlsSection: {
     flexDirection: 'row',
